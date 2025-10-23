@@ -182,69 +182,27 @@ function createAccountCard(account) {
   const level = account.suspicionLevel || 1;
   const suspicionClass = level >=5 ? 'suspicious-high' : level >=3 ? 'suspicious-medium' : 'suspicious-low';
   const reasonsArr = (account.reasons || []);
+  const reasons = reasonsArr.join(', ');
   const relatedCount = (account.relatedAccounts || []).length;
   const timestamp = formatDate(account.detectedAt);
-  
   return `
-  <div class="enhanced-card clickable" onclick="openProfileModal('${account.userId}')">
-    <div class="card-header">
-      <div class="card-avatar">
-        ${account.profilePicture ? 
-          `<img src="${account.profilePicture}" alt="${account.displayName || 'Utilisateur'}">` : 
-          '<span class="material-icons">person_search</span>'
-        }
-      </div>
-      <div class="card-user-info">
-        <div class="card-username">${account.displayName || 'Utilisateur'}</div>
-        <div class="card-subtitle">${account.userId.substring(0, 18)}${account.userId.length > 18 ? '…' : ''}</div>
-        <div class="card-chips">
-          <span class="chip level-${level}">
-            <span class="material-icons">warning</span>
-            Niveau ${level}
-          </span>
-          ${relatedCount > 0 ? `<span class="chip suspicious">${relatedCount} lié${relatedCount > 1 ? 's' : ''}</span>` : ''}
+  <div class="suspicious-card level-${level}">
+    <div class="lvl-circle lvl-${level}">L${level}</div>
+    <div class="sc-header">
+      <div class="sc-avatar">${account.profilePicture ? `<img src="${account.profilePicture}" alt="${account.displayName || 'Utilisateur'}">` : `<span class="material-icons search-btn" data-userid="${account.userId}" style="font-size:26px;opacity:.6;">person_search</span>`}</div>
+      <div class="sc-main">
+        <div class="sc-name">${account.displayName || 'Utilisateur'} </div>
+        <div class="sc-id" style="opacity:.7;font-family:monospace;">${account.userId.substring(0,18)}${account.userId.length>18?'…':''}</div>
+        <div class="sc-meta">
+          <span class="level-badge level-${level} ${suspicionClass}">Niveau ${level}</span>
+          ${relatedCount>0 ? `<span class="rel-badge">${relatedCount} compte${relatedCount>1?'s':''} liés</span>`:''}
+          <span class="detected-time">${timestamp}</span>
         </div>
       </div>
-      <div class="card-status level-${level}">
-        Suspect L${level}
-      </div>
+      <div class="sc-open"><span class="material-icons">chevron_right</span></div>
     </div>
-    
-    <div class="card-body">
-      <div class="card-metrics">
-        <div class="metric-item">
-          <div class="metric-value">${level}</div>
-          <div class="metric-label">Niveau</div>
-        </div>
-        <div class="metric-item">
-          <div class="metric-value">${reasonsArr.length}</div>
-          <div class="metric-label">Raisons</div>
-        </div>
-        <div class="metric-item">
-          <div class="metric-value">${relatedCount}</div>
-          <div class="metric-label">Comptes liés</div>
-        </div>
-      </div>
-      
-      <div class="card-details">
-        <div class="detail-row">
-          <span class="material-icons">access_time</span>
-          <span class="detail-text"><strong>Détecté:</strong> ${timestamp}</span>
-        </div>
-        ${reasonsArr.length > 0 ? `
-          <div class="detail-row">
-            <span class="material-icons">report_problem</span>
-            <span class="detail-text"><strong>Raisons:</strong> ${reasonsArr.slice(0, 2).join(', ')}${reasonsArr.length > 2 ? ` (+${reasonsArr.length - 2})` : ''}</span>
-          </div>
-        ` : ''}
-      </div>
-    </div>
-    
-    <div class="card-footer">
-      <button class="card-action-btn" onclick="openProfileModal('${account.userId}'); event.stopPropagation();">
-        <span class="material-icons">person</span>
-        Profil
-      </button>
+    <div class="sc-reasons">
+      ${reasonsArr.length? reasonsArr.map(r=>`<div class="reason-row"><span class="material-icons warn">warning_amber</span><span>${r}</span></div>`).join('') : '<div class="reason-row empty"><span class="material-icons" style="opacity:.4;">info</span><span>Aucune raison spécifiée</span></div>'}
     </div>
   </div>`;
 }
@@ -314,4 +272,14 @@ async function banAccount() {
 document.addEventListener('click', (e) => {
   const modal = document.getElementById('account-modal');
   if (e.target === modal) closeModal();
+});
+
+// Delegated click: only the person_search icon opens the profile modal now
+document.addEventListener('click', (e) => {
+  const el = e.target.closest && e.target.closest('.search-btn');
+  if (!el) return;
+  const uid = el.dataset.userid;
+  if (uid) {
+    openProfileModal(uid, { showModerationButtons: true });
+  }
 });

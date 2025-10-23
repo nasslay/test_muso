@@ -30,15 +30,41 @@ function waitForServices() {
 	async function fetchUser(userId){
 		if(cache.has(userId)) return cache.get(userId);
 		const firestore = firebase.firestore();
-		const userDoc = await firestore.collection('users').doc(userId).get();
-		if(!userDoc.exists) throw new Error('Utilisateur introuvable');
-		const userData = userDoc.data();
-		let reputation=null; let recentActions=[], adminActions=[], adminNotes=[];
-		try { const repDoc = await firestore.collection('user_reputation').doc(userId).get(); if(repDoc.exists) reputation = repDoc.data(); } catch(e){ console.warn('Réputation indisponible', e); }
+		let userData = null, reputation = null, recentActions = [], adminActions = [], adminNotes = [], stats = null;
+		try {
+			const userDoc = await firestore.collection('users').doc(userId).get();
+			if(!userDoc.exists) throw new Error('Utilisateur introuvable');
+			userData = userDoc.data();
+			console.log('[Profil] userData récupéré:', userData);
+		} catch(e) {
+			console.error('[Profil] Erreur récupération userData:', e);
+		}
+		try {
+			const repDoc = await firestore.collection('user_reputation').doc(userId).get();
+			if(repDoc.exists) reputation = repDoc.data();
+			console.log('[Profil] reputation récupérée:', reputation);
+		} catch(e){
+			console.warn('[Profil] Réputation indisponible', e);
+		}
+		try {
+			// Nouvelle récupération des stats utilisateur (si collection existe)
+			const statsDoc = await firestore.collection('user_stats').doc(userId).get();
+			if(statsDoc.exists) {
+				stats = statsDoc.data();
+				console.log('[Profil] Statistiques récupérées:', stats);
+			} else {
+				console.log('[Profil] Aucun document user_stats trouvé pour', userId);
+			}
+		} catch(e) {
+			console.warn('[Profil] Erreur récupération user_stats:', e);
+		}
 		try {
 			const snap = await firestore.collection('user_actions_log').where('userId','==',userId).orderBy('timestamp','desc').limit(20).get();
 			recentActions = snap.docs.map(d=>({id:d.id,...d.data()}));
-		} catch(e){}
+			console.log('[Profil] recentActions récupérées:', recentActions.length);
+		} catch(e){
+			console.warn('[Profil] Erreur récupération recentActions:', e);
+		}
 		try {
 			// Support ancien champ targetId et nouveau champ userId
 			const q1 = firestore.collection('admin_actions').where('targetId','==',userId).orderBy('timestamp','desc').limit(30);
@@ -49,12 +75,18 @@ function waitForServices() {
 			// dédoublonner par id
 			const uniq = {}; results.forEach(d=>{ uniq[d.id]=d; });
 			adminActions = Object.values(uniq).map(d=>({id:d.id,...d.data()})).sort((a,b)=> (b.timestamp?.toMillis?.()||0)-(a.timestamp?.toMillis?.()||0));
-		} catch(e){ console.warn('Admin actions load failed', e); }
+			console.log('[Profil] adminActions récupérées:', adminActions.length);
+		} catch(e){
+			console.warn('[Profil] Admin actions load failed', e);
+		}
 		try {
 			const snap = await firestore.collection('admin_notes').where('userId','==',userId).orderBy('timestamp','desc').limit(15).get();
 			adminNotes = snap.docs.map(d=>({id:d.id,...d.data()}));
-		} catch(e){}
-		const full = {userId,userData,reputation,recentActions,adminActions,adminNotes};
+			console.log('[Profil] adminNotes récupérées:', adminNotes.length);
+		} catch(e){
+			console.warn('[Profil] Erreur récupération adminNotes:', e);
+		}
+		const full = {userId,userData,reputation,recentActions,adminActions,adminNotes,stats};
 		cache.set(userId, full);
 		return full;
 	}
@@ -188,7 +220,7 @@ function waitForServices() {
 		const modal = document.createElement('div');
 		modal.className='modal'; modal.style.display='flex';
 		modal.innerHTML = `<div class="modal-content profile-modal">
-			<div class="modal-header"><h2>Profil utilisateur</h2><button class="close-btn" data-close-profile>Fermer</button></div>
+			<div class="modal-header"><h2>Profil utilisateur</h2><button class="close-btn" data-close-profile>&times;</button></div>
 			<div class="modal-body">
 				<div class="profile-header">
 					<div class="avatar">${userData.profilePicture||userData.profile_pic?`<img src="${userData.profilePicture||userData.profile_pic}" alt="${userData.username}">`:'<span class="material-icons">account_circle</span>'}</div>
@@ -214,7 +246,7 @@ function waitForServices() {
 						${showAdminPanel?`<div class="admin-actions-wrapper" style="display:block;">
 							<div class="admin-actions-card">
 								<h3><span class="material-icons" style="font-size:22px;color:#bb86fc;">admin_panel_settings</span> Actions administrateur <span class="admin-badge">ADMIN</span></h3>
-								<div class="quick-actions-category-label">Actions rapides</div>
+														<div class="quick-actions-category-label">Historique actions</div>
 								${buildQuickActions(userId,reputation,targetIsAdmin)}
 								<div class="quick-actions-category-label" style="margin-top:22px;">Actions avancées</div>
 								<div class="advanced-actions-row">
@@ -244,7 +276,30 @@ function waitForServices() {
 				modal.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.getAttribute('data-panel')===tab));
 			}
 		});
-		document.body.appendChild(modal);
+			// Make modal visible using existing modal styles
+			modal.classList.add('active');
+			modal.style.display = 'flex';
+			document.body.appendChild(modal);
+
+			// Attach local handlers for advanced actions to ensure they open even if global delegation misses
+			try{
+				modal.querySelectorAll('[data-adv-action]').forEach(btn=>{
+					btn.addEventListener('click', ev=>{
+						ev.stopPropagation();
+						const action = btn.getAttribute('data-adv-action');
+						const uid = btn.getAttribute('data-user');
+						if(action==='adjust-score') openAdjustScoreModal(uid);
+						if(action==='manage-restrictions') openRestrictionsModal(uid);
+					});
+				});
+				modal.querySelectorAll('[data-profile-action]').forEach(btn=>{
+					btn.addEventListener('click', ev=>{
+						ev.stopPropagation();
+						// call the centralized handler to reuse logic
+						handleModerationAction({target:btn, stopPropagation:()=>{}});
+					});
+				});
+			}catch(_){ /* ignore attach errors */ }
 	}
 
 	async function handleModerationAction(e){
@@ -260,54 +315,288 @@ function waitForServices() {
 		if(!btn) return;
 		const action = btn.getAttribute('data-profile-action');
 		const userId = btn.getAttribute('data-user');
-		try {
-			let reason = '';
-			// Map actions vers service
-			if(action===ACTIONS.QUARANTINE){
-				if(!confirm("Mettre l’utilisateur en quarantaine ?")) return; reason = prompt('Raison quarantaine:')||'Quarantaine';
-				await AdminActionsService.quarantineUser({userId, reason});
-			} else if(action===ACTIONS.UNQUARANTINE){
-				reason = prompt('Raison fin quarantaine:')||'Fin quarantaine';
-				await AdminActionsService.unquarantineUser({userId, reason});
-			} else if([ACTIONS.BAN_24,ACTIONS.BAN_7,ACTIONS.BAN_PERM].includes(action)){
-				const hours = action===ACTIONS.BAN_24?24: action===ACTIONS.BAN_7?24*7:24*365*10;
-				if(!confirm('Confirmer bannissement '+(hours>=24*365?'permanent':hours+'h')+' ?')) return;
-				reason = prompt('Raison bannissement:')||'Bannissement';
-				await AdminActionsService.banUser({userId, hours, reason});
-			} else if(action===ACTIONS.UNBAN){
-				if(!confirm('Lever le bannissement ?')) return; reason = prompt('Raison débannissement:')||'Débannissement';
-				await AdminActionsService.unbanUser({userId, reason});
-			} else if(action===ACTIONS.BLOCK_REPORTS){
-				reason = prompt('Raison blocage signalements:')||'Blocage signalements';
-				await AdminActionsService.blockUserReports({userId, reason});
-			} else if(action===ACTIONS.UNBLOCK_REPORTS){
-				reason = prompt('Raison déblocage signalements:')||'Déblocage signalements';
-				await AdminActionsService.unblockUserReports({userId, reason});
-			} else if(action===ACTIONS.BLOCK_VOTES){
-				reason = prompt('Raison blocage votes:')||'Blocage votes';
-				await AdminActionsService.blockUserVotes({userId, reason});
-			} else if(action===ACTIONS.UNBLOCK_VOTES){
-				reason = prompt('Raison déblocage votes:')||'Déblocage votes';
-				await AdminActionsService.unblockUserVotes({userId, reason});
-			} else if(action===ACTIONS.RESET_REP){
-				if(!confirm('Réinitialiser la réputation ?')) return; reason = prompt('Raison reset:')||'Reset';
-				await AdminActionsService.resetUserReputation({userId, reason});
-			} else if(action===ACTIONS.ADD_NOTE){
-				const note = prompt('Texte de la note administrateur:'); if(!note||!note.trim()) return;
-				await AdminActionsService.addAdminNote({userId, note: note.trim(), category:'note'});
-			} else if(action==='revoke'){
-				if(!confirm('Révoquer droits administrateur ?')) return;
-				await firebase.firestore().collection('users').doc(userId).update({isAdmin:false, adminRevokedAt: firebase.firestore.FieldValue.serverTimestamp()});
-				await firebase.firestore().collection('admin_actions').add({userId, adminId:(firebase.auth().currentUser||{}).uid, actionType:'revokeAdmin', reason:'Révocation', timestamp: firebase.firestore.FieldValue.serverTimestamp()});
+
+		// Helper: run the actual admin call either via MUSO.executeWhenReady (queue) or immediately
+		const runOrQueue = (fn)=>{
+			// Return a Promise that resolves when fn finishes. If services are ready, run immediately and await.
+			if(window.MUSO && window.MUSO.servicesReady){
+				try { return Promise.resolve().then(()=>fn()); } catch(err){ return Promise.reject(err); }
 			}
-			alert('Action effectuée');
-			// Refresh modal
-			document.querySelectorAll('.modal').forEach(m=>m.remove());
-			cache.delete(userId);
-			openProfileModal(userId,{showModerationButtons:true});
-		} catch(err){ console.error('❌ Action admin échouée', err); alert(err.message||'Erreur action admin'); }
+
+			// If MUSO exists but not ready, push a wrapper to pendingActions that resolves when fn completes.
+			if(window.MUSO){
+				return new Promise((resolve,reject)=>{
+					const wrapper = async ()=>{
+						try{ const r = await fn(); resolve(r); } catch(e){ reject(e); }
+					};
+					// Push wrapper to the pending queue so executeWhenReady will run it later
+					window.MUSO.pendingActions = window.MUSO.pendingActions || [];
+					window.MUSO.pendingActions.push(wrapper);
+				});
+			}
+
+			// If MUSO not present, just run immediately
+			try { return Promise.resolve().then(()=>fn()); } catch(err){ return Promise.reject(err); }
+		};
+
+		// Small toast helper for feedback
+		function showToast(message, type='info'){ // type: info|success|error
+			const id = 'muso-toast';
+			let el = document.getElementById(id);
+			if(!el){ el = document.createElement('div'); el.id = id; el.className='muso-toast'; document.body.appendChild(el); }
+			el.textContent = message;
+			el.className = 'muso-toast ' + type;
+			el.style.opacity = '1';
+			clearTimeout(el._t);
+			el._t = setTimeout(()=>{ el.style.opacity='0'; }, 3500);
+		}
+
+		// Ensure AdminActionsService is loaded before calling it
+		function ensureAdminLoaded(timeoutMs=5000){
+			if(window.AdminActionsService) return Promise.resolve();
+			return new Promise((resolve,reject)=>{
+				const start = Date.now();
+				const iv = setInterval(()=>{
+					if(window.AdminActionsService){ clearInterval(iv); resolve(); }
+					else if(Date.now()-start>timeoutMs){ clearInterval(iv); reject(new Error('AdminActionsService not available')); }
+				}, 80);
+			});
+		}
+
+		// Call an admin action using the AdminActionsService when available,
+		// otherwise perform a client-side Firestore fallback and log an admin_actions entry.
+		async function callAdminAction(method, payload={}){
+			try{
+				if(window.AdminActionsService && typeof window.AdminActionsService[method] === 'function'){
+					return await window.AdminActionsService[method](payload);
+				}
+				// Fallback: attempt to perform minimal changes directly in Firestore and write an admin_actions log
+				const firestore = firebase.firestore();
+				const adminId = (firebase.auth().currentUser||{}).uid || null;
+				const userId = payload.userId || payload.targetId || null;
+				const actionDoc = {
+					targetId: userId,
+					userId: userId,
+					adminId,
+					actionType: method,
+					payload: payload,
+					reason: payload.reason || payload.note || null,
+					timestamp: firebase.firestore.FieldValue.serverTimestamp()
+				};
+				// Best-effort state updates for common methods
+				if(method === 'quarantineUser'){
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{quarantine:true}}, {merge:true});
+				} else if(method === 'unquarantineUser'){
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{quarantine:false}}, {merge:true});
+				} else if(method === 'banUser'){
+					const hours = payload.hours||0; const bannedUntil = Date.now() + (hours*3600*1000);
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{isBanned:true, bannedUntil:new Date(bannedUntil)}},{merge:true});
+				} else if(method === 'unbanUser'){
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{isBanned:false}},{merge:true});
+				} else if(method === 'blockUserReports'){
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{canReport:false}},{merge:true});
+				} else if(method === 'unblockUserReports'){
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{canReport:true}},{merge:true});
+				} else if(method === 'blockUserVotes'){
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{canVote:false}},{merge:true});
+				} else if(method === 'unblockUserVotes'){
+					await firestore.collection('user_reputation').doc(userId).set({restrictions:{canVote:true}},{merge:true});
+				} else if(method === 'resetUserReputation'){
+					await firestore.collection('user_reputation').doc(userId).set({reputationScore:100, restrictions:{}},{merge:true});
+				} else if(method === 'addAdminNote'){
+					await firestore.collection('admin_notes').add({userId:userId, note: payload.note || payload.reason || '', category: payload.category || 'note', adminId, timestamp: firebase.firestore.FieldValue.serverTimestamp()});
+				} else if(method === 'adjustUserScore'){
+					const delta = payload.scoreChange || 0;
+					const repRef = firestore.collection('user_reputation').doc(userId);
+					await firestore.runTransaction(async (t)=>{
+						const doc = await t.get(repRef);
+						const current = (doc.exists && (doc.data().reputationScore ?? doc.data().score ?? doc.data().points)) || 0;
+						const newScore = Math.max(0, Math.min(200, current + delta));
+						t.set(repRef, {reputationScore:newScore}, {merge:true});
+					});
+				}
+				// Log the admin action
+				try{ await firestore.collection('admin_actions').add(actionDoc); } catch(_){ /* best-effort */ }
+				console.warn('[AdminAction fallback] used client-side fallback for', method, userId);
+				return {fallback:true};
+			} catch(err){ console.error('callAdminAction error', err); throw err; }
+		}
+
+		// Reusable styled action dialog (title, icon HTML, colorClass or color string, description, confirmLabel, onConfirm(reason))
+		function openStyledActionDialog({title, iconHtml='', color='', description='', confirmLabel='Confirmer', confirmClass='btn-primary', textareaPlaceholder='Raison (obligatoire)', onConfirm}){
+			return new Promise((resolve,reject)=>{
+				const modal = document.createElement('div'); modal.className='modal';
+				const colorStyle = color && color.startsWith('#')?(`border-color:${color};box-shadow:0 0 0 4px ${color}22;`):'';
+				modal.innerHTML = `<div class="action-modal" style="max-width:520px;">
+					<div class="modal-header"><h2>${iconHtml} ${title}</h2><button class="close-btn" data-close-modal>&times;</button></div>
+					<div class="modal-body">
+						<div class="action-desc" style="${colorStyle} padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.06); margin-bottom:14px; background: rgba(0,0,0,0.35);">${description}</div>
+						<textarea class="action-reason" placeholder="${textareaPlaceholder}" style="width:100%; min-height:84px; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:transparent; color:inherit;"></textarea>
+						<div class="action-footer" style="display:flex; align-items:center; justify-content:space-between; margin-top:14px;">
+							<button class="btn-text" data-close-modal>Annuler</button>
+							<button class="${confirmClass}" data-confirm disabled>${confirmLabel}</button>
+						</div>
+					</div>
+				</div>`;
+				modal.addEventListener('click', ev=>{ if(ev.target===modal || ev.target.hasAttribute('data-close-modal')) { modal.remove(); reject(new Error('closed')); } });
+				const textarea = modal.querySelector('.action-reason');
+				const confirmBtn = modal.querySelector('[data-confirm]');
+				textarea.addEventListener('input', ()=>{ confirmBtn.disabled = textarea.value.trim().length<3; });
+				confirmBtn.addEventListener('click', async ()=>{
+					const reason = textarea.value.trim();
+					try{
+						// Wait for admin service to be available
+						await ensureAdminLoaded().catch(()=>{});
+						// call user provided handler; allow handler to use runOrQueue
+						await onConfirm(reason);
+						// show success toast and close
+						showToast('Action effectuée', 'success');
+						modal.remove(); resolve(true);
+					}catch(err){ console.error('Erreur action modal', err); showToast(err.message||'Erreur', 'error'); }
+				});
+				// show modal
+				modal.classList.add('active');
+				modal.style.display = 'flex';
+				document.body.appendChild(modal);
+			});
+		}
+
+		// Gather confirmations / reasons synchronously so the user gets immediate feedback
+		try {
+		// Map actions to styled dialogs
+		if(action===ACTIONS.QUARANTINE){
+			await openStyledActionDialog({
+				title: 'Mettre en quarantaine',
+				iconHtml: '<span class="material-icons" style="color:orange;">security</span>',
+				color: '#ff9800',
+				description: 'L\'utilisateur sera mis en quarantaine (niveau 3 anti multi-comptes) et perdra 25 points de réputation.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('quarantineUser', {userId, reason}); }); }
+			});
+		} else if(action===ACTIONS.UNQUARANTINE){
+			await openStyledActionDialog({
+				title: 'Débannir l\'utilisateur',
+				iconHtml: '<span class="material-icons" style="color:green;">lock_open</span>',
+				color: '#4caf50',
+				description: 'L\'utilisateur retrouvera immédiatement ses droits d\'actions.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('unquarantineUser', {userId, reason}); }); }
+			});
+		} else if([ACTIONS.BAN_24,ACTIONS.BAN_7,ACTIONS.BAN_PERM].includes(action)){
+			const hours = action===ACTIONS.BAN_24?24: action===ACTIONS.BAN_7?24*7:24*365*10;
+			const durationText = hours>=24*365? 'permanent' : (hours>=24? `${hours/24} jour(s)` : `${hours} heure(s)`);
+			const desc = (action===ACTIONS.BAN_PERM)?
+				'⚠️ ACTION IRRÉVERSIBLE ⚠️\nLe bannissement permanent ne peut pas être annulé automatiquement. L\'utilisateur ne pourra plus effectuer aucune action sur la plateforme.' :
+				`L\'utilisateur sera banni pendant ${durationText} et ne pourra plus effectuer d\'actions.`;
+			await openStyledActionDialog({
+				title: action===ACTIONS.BAN_PERM? 'Bannissement permanent' : `Bannir l\'utilisateur`,
+				iconHtml: `<span class="material-icons" style="color:red;">block</span>`,
+				color: '#e53935',
+				description: desc,
+				confirmLabel: action===ACTIONS.BAN_PERM? 'BANNIR DÉFINITIVEMENT' : 'Confirmer',
+				confirmClass: action===ACTIONS.BAN_PERM? 'btn-danger':'btn-primary',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('banUser', {userId, hours, reason}); }); }
+			});
+		} else if(action===ACTIONS.UNBAN){
+			await openStyledActionDialog({
+				title: 'Débannir l\'utilisateur',
+				iconHtml: '<span class="material-icons" style="color:green;">lock_open</span>',
+				color: '#4caf50',
+				description: 'L\'utilisateur retrouvera immédiatement ses droits d\'actions.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('unbanUser', {userId, reason}); }); }
+			});
+		} else if(action===ACTIONS.BLOCK_REPORTS){
+			await openStyledActionDialog({
+				title: 'Bloquer signalements',
+				iconHtml: '<span class="material-icons" style="color:orange">report_off</span>',
+				color: '#ff9800',
+				description: 'Empêche la création de nouveaux signalements.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('blockUserReports', {userId, reason}); }); }
+			});
+		} else if(action===ACTIONS.UNBLOCK_REPORTS){
+			await openStyledActionDialog({
+				title: 'Débloquer signalements',
+				iconHtml: '<span class="material-icons" style="color:green">report</span>',
+				color: '#4caf50',
+				description: 'Réautorise l\'utilisateur à créer des signalements.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('unblockUserReports', {userId, reason}); }); }
+			});
+		} else if(action===ACTIONS.BLOCK_VOTES){
+			await openStyledActionDialog({
+				title: 'Bloquer votes',
+				iconHtml: '<span class="material-icons" style="color:#1976d2">how_to_vote</span>',
+				color: '#1976d2',
+				description: 'Empêche de voter sur les signalements.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('blockUserVotes', {userId, reason}); }); }
+			});
+		} else if(action===ACTIONS.UNBLOCK_VOTES){
+			await openStyledActionDialog({
+				title: 'Débloquer votes',
+				iconHtml: '<span class="material-icons" style="color:green">how_to_vote</span>',
+				color: '#4caf50',
+				description: 'Réautorise l\'utilisateur à voter sur les signalements.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('unblockUserVotes', {userId, reason}); }); }
+			});
+		} else if(action===ACTIONS.RESET_REP){
+			await openStyledActionDialog({
+				title: 'Reset réputation',
+				iconHtml: '<span class="material-icons" style="color:blue">refresh</span>',
+				color: '#2196f3',
+				description: 'La réputation sera remise à 100 points avec toutes les restrictions levées. Cette action est réversible.',
+				confirmLabel: 'Confirmer',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('resetUserReputation', {userId, reason}); }); }
+			});
+		} else if(action===ACTIONS.ADD_NOTE){
+			await openStyledActionDialog({
+				title: 'Ajouter une note',
+				iconHtml: '<span class="material-icons" style="color:teal">note_add</span>',
+				color: '#009688',
+				description: 'Ajouter une note administrative pour ce compte.',
+				confirmLabel: 'Ajouter',
+					onConfirm: async (reason)=>{ await runOrQueue(async ()=>{ await callAdminAction('addAdminNote', {userId, note: reason, category:'note'}); }); }
+			});
+		} else if(action==='revoke'){
+			// Revoke admin rights - ask reason then perform immediate update
+			await openStyledActionDialog({
+				title: 'Révoquer admin',
+				iconHtml: '<span class="material-icons" style="color:purple">admin_panel_settings</span>',
+				color: '#7e57c2',
+				description: 'Révoquer les droits administrateur pour cet utilisateur.',
+				confirmLabel: 'Révoquer',
+				onConfirm: async (reason)=>{
+					try {
+						await firebase.firestore().collection('users').doc(userId).update({isAdmin:false, adminRevokedAt: firebase.firestore.FieldValue.serverTimestamp()});
+						await firebase.firestore().collection('admin_actions').add({userId, adminId:(firebase.auth().currentUser||{}).uid, actionType:'revokeAdmin', reason:reason||'Révocation', timestamp: firebase.firestore.FieldValue.serverTimestamp()});
+					} catch(err){ console.error('Erreur révoquer admin', err); alert(err.message||'Erreur révoquer admin'); }
+				}
+			});
+		}
+
+		// Refresh modal/UI
+		document.querySelectorAll('.modal').forEach(m=>m.remove());
+		cache.delete(userId);
+		openProfileModal(userId,{showModerationButtons:true});
+	} catch(err){ console.error('❌ Action admin échouée', err); /* user already sees errors in modal handlers */ }
 	}
 	document.addEventListener('click', handleModerationAction);
+
+
+
+	function closeAllProfileModals(){
+		document.querySelectorAll('.modal').forEach(m=>{
+			if(m.querySelector('.profile-modal')) m.remove();
+		});
+	}
+	window.closeAllProfileModals = closeAllProfileModals;
+
+	document.addEventListener('keydown', e=>{
+		if(e.key==='Escape') closeAllProfileModals();
+	});
 
 	async function openProfileModal(userId, options={}){
 		try { const data = await fetchUser(userId); await buildModal(data, options);} catch(e){ console.error('❌ Profil introuvable', e); alert(e.message||'Profil introuvable'); }
@@ -318,44 +607,59 @@ function waitForServices() {
 	async function openAdjustScoreModal(userId){
 		let repDoc; try { repDoc = await firebase.firestore().collection('user_reputation').doc(userId).get(); } catch(e){}
 		const current = repDoc?.data()?.reputationScore ?? 0;
-		const modal = document.createElement('div');
-		modal.className='modal';
-		modal.innerHTML = `<div class="adjust-score-modal">
-			<h2 class="adjust-score-header"><span class="material-icons" style="color:#bb86fc;">tune</span>Ajuster le score</h2>
-			<div class="adjust-current">Score actuel: <strong>${current}</strong></div>
-			<div class="adjust-buttons-grid">
-				<button class="adjust-btn negative" data-delta="-50">-50</button>
-				<button class="adjust-btn negative" data-delta="-25">-25</button>
-				<button class="adjust-btn negative" data-delta="-10">-10</button>
-				<button class="adjust-btn positive" data-delta="10">+10</button>
-				<button class="adjust-btn positive" data-delta="25">+25</button>
-				<button class="adjust-btn positive" data-delta="50">+50</button>
+		// Build styled adjust-score modal using the new action dialog UI
+		const modal = document.createElement('div'); modal.className='modal';
+		modal.innerHTML = `<div class="action-modal">
+			<div class="modal-header"><h2><span class="material-icons" style="color:#2196f3">tune</span> Ajuster le score</h2><button class="close-btn" data-close-modal>&times;</button></div>
+			<div class="modal-body">
+				<div class="adjust-current">Score actuel: <strong>${current}</strong></div>
+				<div class="choice-grid">
+					<button class="choice-chip" data-delta="-50">-50</button>
+					<button class="choice-chip" data-delta="-25">-25</button>
+					<button class="choice-chip" data-delta="-10">-10</button>
+					<button class="choice-chip" data-delta="10">+10</button>
+					<button class="choice-chip" data-delta="25">+25</button>
+					<button class="choice-chip" data-delta="50">+50</button>
+				</div>
+				<div class="new-score" style="display:none">Nouveau score: <span class="new-score-value"></span></div>
+				<textarea class="action-reason" placeholder="Raison (obligatoire)"></textarea>
+				<div class="action-footer"><button class="btn-text" data-close-modal>Annuler</button><button class="btn-primary" data-apply disabled>Appliquer</button></div>
 			</div>
-			<textarea class="adjust-reason" placeholder="Raison (obligatoire)"></textarea>
-			<div class="adjust-apply-row"><button class="btn-text" data-close-modal>Annuler</button><button class="btn-primary" disabled data-apply-score>Appliquer</button></div>
 		</div>`;
 		modal.addEventListener('click', ev=>{ if(ev.target===modal || ev.target.hasAttribute('data-close-modal')) modal.remove(); });
-		const reasonEl = modal.querySelector('.adjust-reason');
-		const applyBtn = modal.querySelector('[data-apply-score]');
-		modal.querySelectorAll('.adjust-btn').forEach(btn=>btn.addEventListener('click',()=>{
-			modal.querySelectorAll('.adjust-btn').forEach(b=>b.classList.remove('selected'));
-			btn.classList.add('selected');
-			applyBtn.dataset.delta = btn.getAttribute('data-delta');
+		const chips = modal.querySelectorAll('.choice-chip');
+		const reasonEl = modal.querySelector('.action-reason');
+		const applyBtn = modal.querySelector('[data-apply]');
+		const newScoreEl = modal.querySelector('.new-score');
+		const newScoreValue = modal.querySelector('.new-score-value');
+		let selectedDelta = 0;
+		chips.forEach(c=>c.addEventListener('click', ()=>{
+			chips.forEach(x=>x.classList.remove('selected'));
+			c.classList.add('selected');
+			selectedDelta = parseInt(c.getAttribute('data-delta'),10)||0;
+			const newScore = Math.max(0, Math.min(200, current + selectedDelta));
+			newScoreValue.textContent = String(newScore);
+			newScoreEl.style.display = 'block';
 			checkValidity();
 		}));
 		reasonEl.addEventListener('input', checkValidity);
-		function checkValidity(){ applyBtn.disabled = !(applyBtn.dataset.delta && reasonEl.value.trim().length>2); }
+		function checkValidity(){ applyBtn.disabled = !(selectedDelta !== 0 && reasonEl.value.trim().length>2); }
 		applyBtn.addEventListener('click', async ()=>{
-			const delta = parseInt(applyBtn.dataset.delta,10)||0; const reason = reasonEl.value.trim();
-			try {
-				await AdminActionsService.adjustUserScore({userId, scoreChange: delta, reason});
+			const delta = selectedDelta; const reason = reasonEl.value.trim();
+			try{
+				// Run the admin call via runOrQueue so it works even if MUSO/Services are not ready yet
+				await runOrQueue(async ()=>{
+					await ensureAdminLoaded().catch(()=>{});
+					return callAdminAction('adjustUserScore', {userId, scoreChange: delta, reason});
+				});
 				modal.remove(); cache.delete(userId); openProfileModal(userId,{showModerationButtons:true});
-			} catch(err){ alert('Erreur ajustement score'); console.error(err); }
+			}catch(err){ console.error('Erreur ajustement score', err); alert(err.message||'Erreur ajustement score'); }
 		});
 		document.body.appendChild(modal);
 	}
 
 	async function openRestrictionsModal(userId){
+		// show modal immediately; action calls are queued when services become ready
 		let repData={}; try { const doc=await firebase.firestore().collection('user_reputation').doc(userId).get(); if(doc.exists) repData=doc.data(); } catch(e){}
 		const r = repData.restrictions||{};
 		const modal = document.createElement('div'); modal.className='modal';
@@ -381,17 +685,36 @@ function waitForServices() {
 		modal.querySelectorAll('.restriction-toggle-card input').forEach(input=>{
 			input.addEventListener('change', async ()=>{
 				const card = input.closest('.restriction-toggle-card'); const key=card.dataset.key; const value=input.checked;
-				try {
-					if(key==='canReport'){
-						await (value? AdminActionsService.unblockUserReports({userId, reason:'Toggle depuis restrictions'}) : AdminActionsService.blockUserReports({userId, reason:'Toggle depuis restrictions'}));
-					} else if(key==='canVote') {
-						await (value? AdminActionsService.unblockUserVotes({userId, reason:'Toggle depuis restrictions'}) : AdminActionsService.blockUserVotes({userId, reason:'Toggle depuis restrictions'}));
-					} else if(key==='reviewPending') {
-						await firebase.firestore().collection('user_reputation').doc(userId).set({'restrictions.reviewPending': value},{merge:true});
-						await firebase.firestore().collection('admin_actions').add({userId, adminId:(firebase.auth().currentUser||{}).uid, actionType:'toggleModeration', reason: value?'Forcer modération':'Retirer modération', metadata:{reviewPending:value}, timestamp: firebase.firestore.FieldValue.serverTimestamp()});
-					}
-					cache.delete(userId);
-				} catch(err){ console.error(err); alert('Erreur mise à jour restriction'); }
+				// disable input while working
+				input.disabled = true;
+				try{
+					await runOrQueue(async ()=>{
+						await ensureAdminLoaded().catch(()=>{});
+						if(key==='canReport'){
+							await callAdminAction(value? 'unblockUserReports' : 'blockUserReports', {userId, reason:'Toggle depuis restrictions'});
+							showToast(value? 'Signalements débloqués' : 'Signalements bloqués', 'success');
+						} else if(key==='canVote') {
+							await callAdminAction(value? 'unblockUserVotes' : 'blockUserVotes', {userId, reason:'Toggle depuis restrictions'});
+							showToast(value? 'Votes débloqués' : 'Votes bloqués', 'success');
+						} else if(key==='reviewPending') {
+							// use Firestore set for reviewPending because AdminActionsService may not expose a toggle for it
+							await firebase.firestore().collection('user_reputation').doc(userId).set({'restrictions.reviewPending': value},{merge:true});
+							await firebase.firestore().collection('admin_actions').add({userId, adminId:(firebase.auth().currentUser||{}).uid, actionType:'toggleModeration', reason: value?'Forcer modération':'Retirer modération', metadata:{reviewPending:value}, timestamp: firebase.firestore.FieldValue.serverTimestamp()});
+							showToast(value? 'Modération forcée activée' : 'Modération forcée désactivée', 'success');
+						}
+						cache.delete(userId);
+					});
+					// refresh profile modal
+					document.querySelectorAll('.modal').forEach(m=>m.remove());
+					openProfileModal(userId,{showModerationButtons:true});
+				}catch(err){
+					console.error('Erreur mise à jour restriction', err);
+					showToast('Erreur: ' + (err.message||err), 'error');
+					// revert checkbox to previous state on error
+					input.checked = !value;
+				} finally {
+					input.disabled = false;
+				}
 			});
 		});
 		document.body.appendChild(modal);

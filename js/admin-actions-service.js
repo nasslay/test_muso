@@ -58,6 +58,18 @@ function initAdminActionsService() {
   async function adjustUserScore({userId, scoreChange, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    // Prefer server-side callable function
+    if (firebase.functions) {
+      try {
+        const fn = firebase.functions().httpsCallable('adjustUserScore');
+        const res = await fn({ userId, scoreChange, reason });
+        return res.data;
+      } catch(e) {
+        console.warn('adjustUserScore fn failed, falling back to client write', e);
+      }
+    }
+
     const repRef = firestore.collection('user_reputation').doc(userId);
     await repRef.set({ reputationScore: firebase.firestore.FieldValue.increment(scoreChange) }, {merge:true});
     await logAdminAction({adminId:admin.uid, targetUserId:userId, actionType: ACTION_TYPES.SCORE_ADJUST, reason, metadata:{scoreChange}});
@@ -66,6 +78,15 @@ function initAdminActionsService() {
   async function banUser({userId, hours, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try {
+        const fn = firebase.functions().httpsCallable('banUser');
+        const res = await fn({ userId, hours, reason });
+        return res.data;
+      } catch(e){ console.warn('banUser fn failed, falling back to client write', e); }
+    }
+
     const until = new Date(Date.now()+hours*3600000);
     const isPermanent = hours >= 24*365*10; // >10 ans
     const repRef = firestore.collection('user_reputation').doc(userId);
@@ -84,6 +105,11 @@ function initAdminActionsService() {
   async function unbanUser({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('unbanUser'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('unbanUser fn failed', e); }
+    }
+
     const repRef = firestore.collection('user_reputation').doc(userId);
     await repRef.set({
       'restrictions.isBanned': false,
@@ -102,6 +128,11 @@ function initAdminActionsService() {
   async function quarantineUser({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('quarantineUser'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('quarantineUser fn failed', e); }
+    }
+
     const repRef = firestore.collection('user_reputation').doc(userId);
     await repRef.set({
       'restrictions.quarantine': true,
@@ -115,6 +146,11 @@ function initAdminActionsService() {
   async function unquarantineUser({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('unquarantineUser'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('unquarantineUser fn failed', e); }
+    }
+
     const repRef = firestore.collection('user_reputation').doc(userId);
     await repRef.set({
       'restrictions.quarantine': false,
@@ -127,24 +163,44 @@ function initAdminActionsService() {
   async function blockUserReports({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('blockReports'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('blockReports fn failed', e); }
+    }
+
     await firestore.collection('user_reputation').doc(userId).set({'restrictions.canReport': false},{merge:true});
     await logAdminAction({adminId:admin.uid, targetUserId:userId, actionType: ACTION_TYPES.BLOCK_REPORTS, reason});
   }
   async function unblockUserReports({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('unblockReports'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('unblockReports fn failed', e); }
+    }
+
     await firestore.collection('user_reputation').doc(userId).set({'restrictions.canReport': true},{merge:true});
     await logAdminAction({adminId:admin.uid, targetUserId:userId, actionType: ACTION_TYPES.UNBLOCK_REPORTS, reason});
   }
   async function blockUserVotes({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('blockVotes'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('blockVotes fn failed', e); }
+    }
+
     await firestore.collection('user_reputation').doc(userId).set({'restrictions.canVote': false},{merge:true});
     await logAdminAction({adminId:admin.uid, targetUserId:userId, actionType: ACTION_TYPES.BLOCK_VOTES, reason});
   }
   async function unblockUserVotes({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('unblockVotes'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('unblockVotes fn failed', e); }
+    }
+
     await firestore.collection('user_reputation').doc(userId).set({'restrictions.canVote': true},{merge:true});
     await logAdminAction({adminId:admin.uid, targetUserId:userId, actionType: ACTION_TYPES.UNBLOCK_VOTES, reason});
   }
@@ -152,6 +208,11 @@ function initAdminActionsService() {
   async function resetUserReputation({userId, reason}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('resetUserReputation'); return (await fn({ userId, reason })).data; } catch(e){ console.warn('resetUserReputation fn failed', e); }
+    }
+
     const repRef = firestore.collection('user_reputation').doc(userId);
     // Reset valeurs basiques (adapter selon schéma backend si différent)
     await repRef.set({
@@ -167,6 +228,11 @@ function initAdminActionsService() {
   async function addAdminNote({userId, note, category='note'}){
     const admin = auth.currentUser; if(!admin) throw new Error('Non authentifié');
     if(!(await isCurrentUserAdmin())) throw new Error('Permission refusée');
+
+    if (firebase.functions) {
+      try { const fn = firebase.functions().httpsCallable('addAdminNote'); return (await fn({ userId, note, category })).data; } catch(e){ console.warn('addAdminNote fn failed', e); }
+    }
+
     await firestore.collection('admin_notes').add({
       userId, adminId: admin.uid, note, category,
       timestamp: firebase.firestore.FieldValue.serverTimestamp()

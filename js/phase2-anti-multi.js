@@ -168,15 +168,17 @@
 
   async function buildSuspiciousCard(acc){
     const username = await getUsername(acc.id);
-    const levelColor = suspicionColor(acc.suspicionLevel);
+    const levelClass = `level-${acc.suspicionLevel}`;
+    const avatarUrl = acc.metadata && acc.metadata.avatarUrl ? acc.metadata.avatarUrl : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(username) + '&background=0D8ABC&color=fff&size=96';
     const related = acc.relatedAccounts.length ? `<div class='sc-related'><span class='material-icons'>group</span>${acc.relatedAccounts.length} liés</div>`:'';
-    return `<div class="suspicious-card" data-sid="${acc.id}">
+    return `<div class="suspicious-card ${levelClass}" data-sid="${acc.id}">
       <div class="sc-header">
-        <div class="sc-username">@${username}</div>
-        <div class="sc-level" style="--level-color:${levelColor}">Niv ${acc.suspicionLevel}</div>
+        <img class="sc-avatar" src="${avatarUrl}" alt="avatar" />
+        <div class="sc-username">${username}</div>
+        <div class="sc-level">Niv ${acc.suspicionLevel}</div>
       </div>
       <div class="sc-id">ID: ${acc.id.substring(0,8)}...</div>
-      <div class="sc-reasons">${acc.reasons.slice(0,2).join(', ')}${acc.reasons.length>2 ? '…':''}</div>
+      <div class="sc-reasons">${acc.reasons.slice(0,2).map(r=>`<span>⚠️ ${r}</span>`).join('')}${acc.reasons.length>2 ? '<span>…</span>':''}</div>
       ${related}
       <div class="sc-footer">Détecté: ${formatDate(acc.detectedAt)} ${acc.suspicionLevel>=4?'<span class="sc-action-required">Action requise</span>':''}</div>
     </div>`;
@@ -247,15 +249,20 @@
   function ensureModal(){ if(!document.getElementById('generic-modal')){ /* créé par phase1 si déjà chargé */ } }
 
   function openModal(title, body){
-    if(window.Phase1Moderation && document.getElementById('generic-modal')){
-      const modal = document.getElementById('generic-modal');
-      modal.querySelector('#generic-modal-title').textContent = title;
-      modal.querySelector('#generic-modal-body').innerHTML = body;
-      modal.style.display='flex';
-    } else {
-      // fallback simple
-      alert(title+'\n'+body.replace(/<[^>]+>/g,''));
+    // Always use a custom modal for phase 2
+    let modal = document.getElementById('phase2-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'phase2-modal';
+      modal.className = 'phase2-modal';
+      document.body.appendChild(modal);
     }
+    modal.innerHTML = `<div class='phase2-modal-content'><div class='phase2-modal-header'><div class='phase2-modal-title'>${title}</div><button class='phase2-modal-close'>&times;</button></div><div class='phase2-modal-body'>${body}</div></div>`;
+    modal.style.display = 'flex';
+    // Close logic
+    modal.querySelector('.phase2-modal-close').onclick = function() { modal.style.display = 'none'; };
+    // Optional: close on click outside
+    modal.onclick = function(e) { if (e.target === modal) modal.style.display = 'none'; };
   }
 
   function attachSuspiciousCardEvents(){
@@ -284,17 +291,33 @@
 
   async function openSuspiciousDetails(acc){
     const username = await getUsername(acc.id);
-    const relatedHtml = acc.relatedAccounts.length ? `<h4>Comptes liés</h4><ul class='related-list'>${acc.relatedAccounts.map(a=>`<li>${a.substring(0,10)}...</li>`).join('')}</ul>`:'';
+    // Avatar: use a placeholder or initials if not available
+    const avatarUrl = acc.metadata && acc.metadata.avatarUrl ? acc.metadata.avatarUrl : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(username) + '&background=0D8ABC&color=fff&size=96';
+    const levelClass = `level-${acc.suspicionLevel}`;
+    const levelLabel = `Niveau ${acc.suspicionLevel}`;
+    const badgeColor = acc.suspicionLevel >= 5 ? '#ef5350' : acc.suspicionLevel === 4 ? '#fb8c00' : acc.suspicionLevel === 3 ? '#fdd835' : acc.suspicionLevel === 2 ? '#ffee58' : '#8bc34a';
+    const relatedHtml = acc.relatedAccounts.length ? `<div class='phase2-modal-linked-title'>Comptes liés:</div><div class='phase2-modal-linked-list'>${acc.relatedAccounts.map(a=>`<div class='phase2-modal-linked-item'><span class='material-icons'>person</span> @${a.substring(0,10)}...</div>`).join('')}</div>`:'';
     openModal('Compte suspect @'+username, `
-      <div class='detail-grid'>
-        <div><strong>ID</strong><span>${acc.id}</span></div>
-        <div><strong>Niveau</strong><span>${acc.suspicionLevel}</span></div>
-        <div><strong>Détecté</strong><span>${formatDate(acc.detectedAt)}</span></div>
-        <div><strong>Device</strong><span>${acc.deviceId.substring(0,12)}...</span></div>
+      <div class="phase2-modal-modern">
+        <div class="phase2-modal-modern-header">
+          <img class="phase2-modal-avatar" src="${avatarUrl}" alt="avatar" />
+          <div class="phase2-modal-userinfo">
+            <div class="phase2-modal-username">@${username}</div>
+            <div class="phase2-modal-id">ID: ${acc.id.substring(0,10)}...</div>
+          </div>
+          <span class="phase2-modal-badge ${levelClass}" style="background:${badgeColor};">${levelLabel}</span>
+        </div>
+        <div class="phase2-modal-modern-body">
+          <div class="phase2-modal-info-row"><span>Appareil:</span> <b>${acc.deviceId.substring(0,12)}...</b></div>
+          <div class="phase2-modal-info-row"><span>Détecté le:</span> <b>${formatDate(acc.detectedAt)}</b></div>
+          <div class="phase2-modal-info-row"><span>Statut:</span> <b>${acc.status ? acc.status.toUpperCase() : 'PENDING'}</b></div>
+          <div class="phase2-modal-reasons">
+            <div class="phase2-modal-reasons-title">Raisons:</div>
+            ${acc.reasons.map(r=>`<div class='phase2-modal-reason'><span class='material-icons warning'>warning</span> ${r}</div>`).join('')}
+          </div>
+          ${relatedHtml}
+        </div>
       </div>
-      <h4>Raisons</h4>
-      <ul class='reasons-list'>${acc.reasons.map(r=>`<li>${r}</li>`).join('')}</ul>
-      ${relatedHtml}
     `);
   }
 

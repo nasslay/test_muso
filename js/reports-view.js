@@ -161,75 +161,59 @@ function renderReports() {
   reportsList.innerHTML = pageReports.map(report => createReportCard(report)).join('');
   
   updateStats();
+  
+  // Ajout : rendre chaque card cliquable JS (robuste)
+  document.querySelectorAll('.report-card').forEach(card => {
+    const userId = card.getAttribute('data-userid');
+    card.style.cursor = 'pointer';
+    if (userId && userId.trim() && userId !== 'undefined' && userId !== 'null') {
+      card.onclick = (e) => {
+        console.log('[Signalement] Ouverture profil userID =', userId);
+        openProfileModal(userId);
+      };
+    } else {
+      card.onclick = (e) => {
+        console.log('[Signalement] Aucun userID, ouverture détails report', card.getAttribute('data-reportid'));
+        showReportDetails(card.getAttribute('data-reportid'));
+      };
+    }
+  });
 }
 
 function createReportCard(report) {
-  const status = report.status || 'pending';
-  const statusText = {
-    pending: 'En attente',
-    confirmed: 'Confirmé',
-    denied: 'Rejeté'
-  }[status] || 'En attente';
-  
-  const typeText = getReportTypeText(report.type);
-  const timestamp = formatDate(report.timestamp);
-  
+  const cardClick = report.userID
+    ? `openProfileModal('${report.userID}');`
+    : `showReportDetails('${report.id}');`;
   return `
-    <div class="enhanced-card clickable" onclick="showReportDetails('${report.id}')">
-      <div class="card-header">
-        <div class="card-avatar">
-          <span class="material-icons">report_problem</span>
-        </div>
-        <div class="card-user-info">
-          <div class="card-username">${report.stopName || 'Arrêt inconnu'}</div>
-          <div class="card-subtitle">${report.id.substring(0, 8)}...</div>
-          <div class="card-chips">
-            <span class="chip ${status}">
-              <span class="material-icons">${status === 'confirmed' ? 'check_circle' : status === 'denied' ? 'cancel' : 'schedule'}</span>
-              ${statusText}
-            </span>
-            <span class="chip reputation-neutral">${typeText}</span>
-          </div>
+    <div class="report-card" data-userid="${report.userID||''}" data-reportid="${report.id}">
+      <div class="report-card-header">
+        <div class="report-info">
+          <div class="report-stop-name">${report.stopName || 'Arrêt inconnu'}</div>
+          <span class="report-type">${getReportTypeText(report.type)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          ${report.userID ? `<button class="card-action-btn" onclick="openProfileModal('${report.userID}'); event.stopPropagation();"><span class="material-icons">person</span></button>` : ''}
-          <div class="card-status ${status}">
-            ${statusText}
-          </div>
+          <span class="report-status ${report.status||'pending'}">${{
+            pending: 'En attente',
+            confirmed: 'Confirmé',
+            denied: 'Rejeté'
+          }[report.status] || 'En attente'}</span>
         </div>
       </div>
-      
-      ${report.description ? `
-        <div class="card-body">
-          <div class="card-details">
-            <div class="detail-row">
-              <span class="material-icons">description</span>
-              <span class="detail-text">${escapeHtml(report.description)}</span>
-            </div>
-            <div class="detail-row">
-              <span class="material-icons">person</span>
-              <span class="detail-text"><strong>Utilisateur:</strong> ${report.userID ? report.userID.substring(0, 8) + '...' : 'Anonyme'}</span>
-            </div>
-            <div class="detail-row">
-              <span class="material-icons">schedule</span>
-              <span class="detail-text"><strong>Signalé:</strong> ${timestamp}</span>
-            </div>
-          </div>
+      ${report.description ? `<div class="report-description">${escapeHtml(report.description)}</div>` : ''}
+      <div class="report-metadata">
+        <div class="metadata-item">
+          <span class="material-icons">person</span>
+          <span>${report.userID ? report.userID.substring(0, 8) + '...' : 'Anonyme'}</span>
         </div>
-      ` : `
-        <div class="card-body">
-          <div class="card-details">
-            <div class="detail-row">
-              <span class="material-icons">person</span>
-              <span class="detail-text"><strong>Utilisateur:</strong> ${report.userID ? report.userID.substring(0, 8) + '...' : 'Anonyme'}</span>
-            </div>
-            <div class="detail-row">
-              <span class="material-icons">schedule</span>
-              <span class="detail-text"><strong>Signalé:</strong> ${timestamp}</span>
-            </div>
-          </div>
+        <div class="metadata-item">
+          <span class="material-icons">schedule</span>
+          <span>${formatDate(report.timestamp)}</span>
         </div>
-      `}
+        <div class="metadata-item">
+          <span class="material-icons">fingerprint</span>
+          <span>ID: ${report.id.substring(0, 8)}...</span>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -336,23 +320,6 @@ function showReportDetails(reportId) {
         <h3 style="color: #bb86fc; margin-bottom: 8px;">👤 Utilisateur</h3>
         <div style="display: flex; align-items: center; gap: 12px;">
           <p style="color: #ccc; font-family: monospace; margin: 0;">${currentReport.userID || 'Anonyme'}</p>
-          ${currentReport.userID ? `
-            <button onclick="openProfileModal('${currentReport.userID}', { showModerationButtons: true })" 
-                    style="background: rgba(187, 134, 252, 0.1); 
-                           border: 1px solid rgba(187, 134, 252, 0.3); 
-                           color: #bb86fc; 
-                           padding: 6px 12px; 
-                           border-radius: 6px; 
-                           cursor: pointer; 
-                           display: flex; 
-                           align-items: center; 
-                           gap: 4px;
-                           font-size: 14px;
-                           transition: all 0.2s;">
-              <span class="material-icons" style="font-size: 18px;">person</span>
-              Voir profil
-            </button>
-          ` : ''}
         </div>
       </div>
       

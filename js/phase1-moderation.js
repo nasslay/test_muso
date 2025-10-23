@@ -215,7 +215,6 @@
         <div class="rc-actions">
           <button class="btn-mini" data-action="details" title="Détails"><span class="material-icons">info</span></button>
           <button class="btn-mini subtle" data-action="history" title="Historique"><span class="material-icons">history</span></button>
-          <button class="btn-mini" data-action="admin" title="Actions administrateur"><span class="material-icons">gavel</span></button>
         </div>
         ${bannedUntil ? `<div class="rc-banned">Banni jusqu'au ${formatDate(bannedUntil)}</div>`:''}
       </div>
@@ -338,112 +337,8 @@
         if(!user) return;
         if(action==='details'){ openUserDetailsModal(user); }
         else if(action==='history'){ openUserHistoryModal(uid); }
-        else if(action==='admin'){ openAdminActionsMenu(uid); }
       });
     });
-  }
-
-  function ensureAdminMenu(){
-    if(document.getElementById('admin-actions-menu')) return;
-    const div=document.createElement('div');
-    div.id='admin-actions-menu';
-    div.className='modal';
-    div.innerHTML=`<div class="modal-content" style="max-width:760px;">
-      <div class="modal-header"><h3>Actions administrateur <span class="badge-admin">ADMIN</span></h3><button class="modal-close" data-close>&times;</button></div>
-      <div class="modal-body">
-        <div id="admin-actions-target" style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;"></div>
-        <h4 style="margin:4px 0 8px;font-size:11px;letter-spacing:.5px;color:var(--text-tertiary);">ACTIONS RAPIDES</h4>
-        <div class="quick-actions-row" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-          <button data-act="quarantine" class="qa-btn danger">Quarantaine</button>
-          <button data-act="ban24h" class="qa-btn danger">Bannir 24h</button>
-          <button data-act="ban7j" class="qa-btn danger">Bannir 7j</button>
-          <button data-act="banPermanent" class="qa-btn danger">Bannissement permanent</button>
-          <button data-act="unblockReports" class="qa-btn">Débloquer signalements</button>
-          <button data-act="unblockVotes" class="qa-btn">Débloquer votes</button>
-          <button data-act="forceModeration" class="qa-btn warn">Forcer modération</button>
-          <button data-act="reset" class="qa-btn warn">Réinitialiser réputation</button>
-          <button data-act="note" class="qa-btn">Ajouter une note</button>
-          <button data-act="revokeAdmin" class="qa-btn">Révoquer admin</button>
-        </div>
-        <h4 style="margin:4px 0 8px;font-size:11px;letter-spacing:.5px;color:var(--text-tertiary);">ACTIONS AVANCÉES</h4>
-        <div class="advanced-actions" style="display:flex;flex-direction:column;gap:10px;">
-          <button data-act="scoreAdjust" class="adv-btn"><span class="material-icons" style="font-size:16px;margin-right:6px;">tune</span>Ajuster le score</button>
-          <button data-act="manageRestrictions" class="adv-btn"><span class="material-icons" style="font-size:16px;margin-right:6px;">lock</span>Gérer les restrictions</button>
-        </div>
-        <div id="admin-action-feedback" style="margin-top:16px;font-size:12px;color:var(--text-secondary);"></div>
-      </div>
-    </div>`;
-    document.body.appendChild(div);
-    div.addEventListener('click', e=>{ if(e.target.dataset.close!==undefined || e.target===div) div.style.display='none'; });
-  }
-
-  function openAdminActionsMenu(uid){
-    ensureAdminMenu();
-    const modal=document.getElementById('admin-actions-menu');
-    modal.style.display='flex';
-    modal.querySelector('#admin-actions-target').textContent='Cible: '+uid;
-    const grid=modal.querySelector('.admin-actions-grid');
-    grid.querySelectorAll('button[data-act]').forEach(btn=>{
-      btn.onclick=()=>handleAdminActionClick(uid, btn.dataset.act, modal);
-    });
-  }
-
-  function ask(promptText, def=''){
-    const val=window.prompt(promptText, def); if(val===null) return null; return val.trim();
-  }
-
-  async function handleAdminActionClick(uid, act, modal){
-    if(!window.AdminActionsService){ alert('Service admin indisponible'); return; }
-    let ok=false; let reason='';
-    switch(act){
-      case 'ban24h': { reason=ask('Raison bannissement 24h','Violation règles'); if(reason===null) return; ok=await AdminActionsService.banUser(uid,24,reason); break; }
-      case 'ban7j': { reason=ask('Raison bannissement 7j','Récidive'); if(reason===null) return; ok=await AdminActionsService.banUser(uid,24*7,reason); break; }
-      case 'banPermanent': { reason=ask('Raison bannissement permanent','Grave infraction'); if(reason===null) return; ok=await AdminActionsService.banUser(uid,24*365*11,reason); break; }
-      case 'scoreAdjust': {
-        const deltaStr=ask('Delta score (ex -10 / 15)','-10'); if(deltaStr===null) return; const delta=parseInt(deltaStr,10); if(isNaN(delta)) return alert('Nombre invalide');
-        reason=ask('Raison ajustement','Ajustement manuel'); if(reason===null) return; ok=await AdminActionsService.adjustScore(uid, delta, reason); break; }
-      case 'ban': {
-        const hoursStr=ask('Durée heures (24,72,87600=~10ans)','24'); if(hoursStr===null) return; const h=parseInt(hoursStr,10); if(isNaN(h)||h<=0) return alert('Durée invalide');
-        reason=ask('Raison bannissement','Violation règles'); if(reason===null) return; ok=await AdminActionsService.banUser(uid,h,reason); break; }
-      case 'unban': { reason=ask('Raison débannissement','Réévaluation'); if(reason===null) return; ok=await AdminActionsService.unbanUser(uid,reason); break; }
-      case 'quarantine': { reason=ask('Raison quarantaine','Multi suspicion'); if(reason===null) return; ok=await AdminActionsService.quarantineUser(uid,reason); break; }
-      case 'unquarantine': { reason=ask('Raison fin quarantaine','OK'); if(reason===null) return; ok=await AdminActionsService.unquarantineUser(uid,reason); break; }
-      case 'blockReports': { reason=ask('Raison blocage reports','Abus signalements'); if(reason===null) return; ok=await AdminActionsService.blockReports(uid,reason); break; }
-      case 'unblockReports': { reason=ask('Raison déblocage reports','Réévaluation'); if(reason===null) return; ok=await AdminActionsService.unblockReports(uid,reason); break; }
-      case 'blockVotes': { reason=ask('Raison blocage votes','Abus votes'); if(reason===null) return; ok=await AdminActionsService.blockVotes(uid,reason); break; }
-      case 'unblockVotes': { reason=ask('Raison déblocage votes','Réévaluation'); if(reason===null) return; ok=await AdminActionsService.unblockVotes(uid,reason); break; }
-      case 'reset': { reason=ask('Raison reset','Reset complet'); if(reason===null) return; ok=await AdminActionsService.resetReputation(uid,reason); break; }
-      case 'note': { const note=ask('Contenu note','Observation'); if(note===null||!note) return; const cat=ask('Catégorie (info/risque/suivi)','info')||'info'; ok=await AdminActionsService.addAdminNote(uid,note,cat); break; }
-      case 'forceModeration': { reason=ask('Raison modération forcée','Comportement suspect'); if(reason===null) return; ok=await setNeedsModeration(uid,true,reason); break; }
-      case 'manageRestrictions': { openRestrictionsManager(uid); return; }
-      case 'revokeAdmin': { const confirm=ask('Confirmer révocation admin? tapez OUI','NON'); if(confirm!=='OUI') return; ok=await revokeAdmin(uid); break; }
-    }
-    const fb=modal.querySelector('#admin-action-feedback'); if(fb) fb.textContent = ok? '✅ Action '+act+' effectuée' : '❌ Action '+act+' échouée';
-    if(ok){ loadUsers(); }
-  }
-
-  async function setNeedsModeration(uid,val,reason){
-    try { await FirebaseServices.firestore.collection(COLLECTIONS.userReputation()).doc(uid).set({ 'restrictions.needsModeration': val },{merge:true}); await AdminActionsService.addAdminNote(uid, (val?'Forcer':'Lever')+' modération: '+reason, 'suivi'); return true; } catch(e){ console.error('setNeedsModeration',e); return false; }
-  }
-  async function revokeAdmin(uid){
-    try { await FirebaseServices.firestore.collection(COLLECTIONS.users()).doc(uid).set({ isAdmin:false },{merge:true}); await FirebaseServices.firestore.collection(FirebaseServices.collections.adminActions).add({ adminId: AdminAuth.currentUser.uid, userId: uid, actionType:'revokeAdmin', timestamp: FirebaseServices.timestamp(), source:'web_dashboard'}); return true; } catch(e){ console.error('revokeAdmin',e); return false; }
-  }
-  function openRestrictionsManager(uid){
-    openGenericModal('Restrictions '+uid.substring(0,8)+'...', `<div style='display:flex;flex-direction:column;gap:12px;'>
-      <button id='rm-block-reports' class='adv-btn'>Bloquer signalements</button>
-      <button id='rm-unblock-reports' class='adv-btn'>Débloquer signalements</button>
-      <button id='rm-block-votes' class='adv-btn'>Bloquer votes</button>
-      <button id='rm-unblock-votes' class='adv-btn'>Débloquer votes</button>
-      <button id='rm-force-mod' class='adv-btn warn'>Forcer modération</button>
-      <button id='rm-unforce-mod' class='adv-btn'>Lever modération forcée</button>
-    </div>`);
-    const bind=(id,fn)=>{ const b=document.getElementById(id); if(b) b.onclick=fn; };
-    bind('rm-block-reports', ()=>handleAdminActionClick(uid,'blockReports', document.getElementById('admin-actions-menu')));
-    bind('rm-unblock-reports', ()=>handleAdminActionClick(uid,'unblockReports', document.getElementById('admin-actions-menu')));
-    bind('rm-block-votes', ()=>handleAdminActionClick(uid,'blockVotes', document.getElementById('admin-actions-menu')));
-    bind('rm-unblock-votes', ()=>handleAdminActionClick(uid,'unblockVotes', document.getElementById('admin-actions-menu')));
-    bind('rm-force-mod', ()=>handleAdminActionClick(uid,'forceModeration', document.getElementById('admin-actions-menu')));
-    bind('rm-unforce-mod', ()=>setNeedsModeration(uid,false,'Levée manuelle'));
   }
 
   function attachActionCardEvents(){
@@ -536,22 +431,15 @@
     if(searchInput){
       searchInput.addEventListener('input', ()=>{ state.search = searchInput.value; state.usersPage=0; applyUserFilters(); renderActions(); });
     }
-    const problematicCheckbox = qs('problematic-only');
-    if(problematicCheckbox){
-      problematicCheckbox.addEventListener('change', ()=>{ state.problematicOnly = problematicCheckbox.checked; loadUsers(); });
-    }
-    const sortSelect = qs('sort-by');
-    if(sortSelect){
-      sortSelect.addEventListener('change', ()=>{ state.sortBy = sortSelect.value; applyUserFilters(); });
-    }
     const refreshBtn = qs('refresh-phase1');
     if(refreshBtn){ refreshBtn.addEventListener('click', ()=>{ loadUsers(); loadActions(); }); }
   }
 
   // ============== INIT ==============
   async function initialize(){
-    // Protéger exécutions multiples
-    if(initialize._ran) return; initialize._ran = true;
+     console.log('[Phase1Moderation] initialize() called');
+     // Protéger exécutions multiples
+     if(initialize._ran) return; initialize._ran = true;
     bindControls();
   await loadUsers();
   // Charger les actions en parallèle sans bloquer le rendu initial des users

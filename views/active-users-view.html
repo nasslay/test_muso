@@ -6,7 +6,6 @@
     <title>MUSO - Utilisateurs actifs</title>
     <link rel="stylesheet" href="../css/admin-dashboard.css">
     <link rel="stylesheet" href="../css/detailed-views.css">
-    <link rel="stylesheet" href="../css/enhanced-cards.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
@@ -26,102 +25,52 @@
             </button>
         </header>
 
-        <!-- Enhanced Search & Filters -->
-        <div class="search-filters-container">
-            <div class="search-bar">
-                <div class="search-input-container">
-                    <span class="material-icons search-icon">search</span>
-                    <input type="text" id="search-input" class="search-input" 
-                           placeholder="Rechercher par nom, email ou ID..." 
-                           onkeyup="applyFilters()">
-                    <button class="clear-search" id="clear-search" style="display: none;" onclick="clearSearch()">
-                        <span class="material-icons">clear</span>
-                    </button>
-                </div>
+        <div class="filters-container">
+            <div class="search-box">
+                <span class="material-icons">search</span>
+                <input type="text" id="search-input" placeholder="Rechercher par nom ou ID..." onkeyup="applyFilters()">
             </div>
-            <div class="filters-row">
-                <div class="filter-chips">
-                    <div class="filter-chip active" data-filter="all" onclick="setActivityFilter('all')">
-                        <span class="material-icons">people</span>
-                        Tous
-                    </div>
-                    <div class="filter-chip" data-filter="high" onclick="setActivityFilter('high')">
-                        <span class="material-icons">trending_up</span>
-                        Très actifs (>10)
-                    </div>
-                    <div class="filter-chip" data-filter="medium" onclick="setActivityFilter('medium')">
-                        <span class="material-icons">remove</span>
-                        Actifs (5-10)
-                    </div>
-                    <div class="filter-chip" data-filter="low" onclick="setActivityFilter('low')">
-                        <span class="material-icons">trending_down</span>
-                        Peu actifs (<5)
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Enhanced List Header -->
-        <div class="list-header">
-            <div class="list-title">
-                <span class="material-icons">analytics</span>
-                Activité des utilisateurs
-            </div>
-            <div class="list-stats">
-                <span>Total: <strong id="total-active">--</strong></span>
-                <span>Affichés: <strong id="filtered-active">--</strong></span>
-            </div>
-            <div class="list-actions">
-                <button class="list-action-btn" onclick="loadActiveUsers()">
-                    <span class="material-icons">refresh</span>
-                    Actualiser
+            <div class="filter-buttons">
+                <button class="filter-btn active" onclick="setActivityFilter('all')">
+                    <span class="material-icons">people</span>
+                    Tous
+                </button>
+                <button class="filter-btn" onclick="setActivityFilter('high')">
+                    <span class="material-icons">trending_up</span>
+                    Très actifs (>10)
+                </button>
+                <button class="filter-btn" onclick="setActivityFilter('medium')">
+                    <span class="material-icons">remove</span>
+                    Actifs (5-10)
+                </button>
+                <button class="filter-btn" onclick="setActivityFilter('low')">
+                    <span class="material-icons">trending_down</span>
+                    Peu actifs (<5)
                 </button>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Loading State -->
-            <div id="loading-spinner" class="loading-spinner">
+        <div class="stats-header">
+            <div class="stat-item">
+                <span class="stat-label">Total actifs</span>
+                <span class="stat-value" id="total-active">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Filtrés</span>
+                <span class="stat-value" id="filtered-active">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Page</span>
+                <span class="stat-value" id="current-page-info">1/1</span>
+            </div>
+        </div>
+
+    <!-- (Optional future) summary bar for activity distribution -->
+
+        <div class="content-area">
+            <div id="loading-spinner" class="loading-spinner" style="display:none;">
                 <div class="spinner"></div>
             </div>
-
-            <!-- Enhanced Users List -->
-            <div id="active-list" class="enhanced-list" style="display: none;"></div>
-
-            <!-- Empty State -->
-            <div id="empty-state" class="empty-state" style="display: none;">
-                <span class="material-icons">people_outline</span>
-                <h3>Aucun utilisateur actif</h3>
-                <p>Aucune activité détectée dans les dernières 24 heures.</p>
-            </div>
-        </main>
-
-        <!-- Enhanced Pagination -->
-        <div class="enhanced-pagination" id="pagination-container" style="display: none;">
-            <div class="pagination-info">
-                <span id="current-page-info">Page 1 / 1</span>
-            </div>
-            <div class="pagination-controls">
-                <button id="prev-page" class="pagination-btn" onclick="previousPage()">
-                    <span class="material-icons">chevron_left</span>
-                </button>
-                <button id="next-page" class="pagination-btn" onclick="nextPage()">
-                    <span class="material-icons">chevron_right</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-    <script src="../js/core/firebase-config.js"></script>
-    <script src="../js/core/profile.js"></script>
-    <script src="../js/active-users-view.js"></script>
-</body>
-</html>
             <div id="active-list" class="accounts-list"></div>
             <div id="empty-state" class="empty-state" style="display: none;">
                 <span class="material-icons">people</span>

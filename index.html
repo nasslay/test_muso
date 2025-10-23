@@ -244,90 +244,81 @@
                         <h2>Modération - Phase 1</h2>
                     </div>
 
-                    <!-- Metrics Phase 1 (mobile parity) -->
-                    <div class="phase-metrics-grid" id="phase1-metrics">
-                        <div class="phase-metric-card" data-metric="low-rep">
-                            <div class="pm-label">Réputation faible</div>
-                            <div class="pm-value" id="metric-low-rep">--</div>
-                        </div>
-                        <div class="phase-metric-card" data-metric="banned-users">
-                            <div class="pm-label">Utilisateurs bannis</div>
-                            <div class="pm-value" id="metric-banned-users">--</div>
-                        </div>
-                        <div class="phase-metric-card wide" data-metric="total-users">
-                            <div class="pm-label">Total utilisateurs</div>
-                            <div class="pm-value" id="metric-total-users-phase1">--</div>
-                        </div>
-                        <button class="phase-refresh-btn" id="refresh-phase1" title="Rafraîchir Phase 1"><span class="material-icons">refresh</span></button>
-                    </div>
+                    <!-- Phase 1: two-column layout (metrics + users on left, actions on right) -->
+                    <div class="phase1-two-column">
+                        <div class="phase1-left">
+                            <!-- Metrics Phase 1 (mobile parity) -->
+                            <div class="phase-metrics-grid" id="phase1-metrics">
+                                <div class="phase-metric-card metric-small" data-metric="low-rep">
+                                    <div class="pm-label">Réputation faible</div>
+                                    <div class="pm-value metric-number" id="metric-low-rep">--</div>
+                                </div>
+                                <div class="phase-metric-card metric-small" data-metric="banned-users">
+                                    <div class="pm-label">Utilisateurs bannis</div>
+                                    <div class="pm-value metric-number" id="metric-banned-users">--</div>
+                                </div>
+                                <div class="phase-metric-card metric-wide" data-metric="total-users">
+                                    <div class="pm-label">Total utilisateurs</div>
+                                    <div class="pm-value metric-number" id="metric-total-users-phase1">--</div>
+                                </div>
+                                <button class="phase-refresh-btn" id="refresh-phase1" title="Rafraîchir Phase 1"><span class="material-icons">refresh</span></button>
+                            </div>
 
-                    <div class="problem-users-section">
-                        <h3 class="sub-section-title">Utilisateurs problématiques</h3>
-                        <div id="problem-users-list" class="problem-users-list">
-                            <!-- Cartes utilisateurs problématiques dynamiques -->
-                        </div>
-                        <div class="empty-card" id="problem-users-empty" style="display:none;">Aucun utilisateur problématique</div>
-                    </div>
+                            <!-- Filters and search (keeps original IDs for JS) -->
+                            <div class="filters-section phase1-filters">
+                                <div class="filters-row">
+                                        <input type="text" id="user-search" placeholder="Rechercher un utilisateur..." class="search-input">
+                                    </div>
+                            </div>
 
-                    <!-- Moderation Filters -->
-                    <div class="filters-section">
-                        <div class="filters-row">
-                            <input type="text" id="user-search" placeholder="Rechercher un utilisateur..." class="search-input">
-                            <select id="action-filter" class="filter-select">
-                                <option value="all">Toutes les actions</option>
-                                <option value="ban">Bannissements</option>
-                                <option value="scoreAdjust">Ajustements score</option>
-                                <option value="quarantine">Quarantaine</option>
-                                <option value="restrict">Restrictions</option>
-                            </select>
-                            <select id="sort-by" class="filter-select">
-                                <option value="score">Trier par score</option>
-                                <option value="reportCount">Trier par signalements</option>
-                                <option value="lastActivity">Dernière activité</option>
-                            </select>
-                            <div class="filter-options">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="problematic-only" checked>
-                                    <span>Problématiques uniquement</span>
-                                </label>
+                            <!-- Problematic users list (cards) -->
+                            <div class="problem-users-section">
+                                <h3 class="sub-section-title">Utilisateurs problématiques</h3>
+                                <div id="problem-users-list" class="problem-users-list">
+                                    <!-- Cartes utilisateurs problématiques dynamiques (JS will populate here) -->
+                                </div>
+                                <div class="empty-card" id="problem-users-empty" style="display:none;">Aucun utilisateur problématique</div>
+                            </div>
+
+                            <!-- Pagination (keeps IDs) -->
+                            <div class="pagination-container phase1-pagination">
+                                <div class="pagination-info">
+                                    <span id="users-pagination-info">-- utilisateurs</span>
+                                </div>
+                                <div class="pagination-controls">
+                                    <button id="users-prev-page" class="pagination-btn" disabled>Précédent</button>
+                                    <span id="users-page-info">Page 1</span>
+                                    <button id="users-next-page" class="pagination-btn">Suivant</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Users Table -->
-                    <div class="table-container">
-                        <table class="data-table" id="users-table">
-                            <thead>
-                                <tr>
-                                    <th>Utilisateur</th>
-                                    <th>Score</th>
-                                    <th>Signalements</th>
-                                    <th>Statut</th>
-                                    <th>Dernière activité</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-table-body">
-                                <!-- Les données utilisateurs seront chargées ici -->
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Pagination -->
-                    <div class="pagination-container">
-                        <div class="pagination-info">
-                            <span id="users-pagination-info">-- utilisateurs</span>
-                        </div>
-                        <div class="pagination-controls">
-                            <button id="users-prev-page" class="pagination-btn" disabled>Précédent</button>
-                            <span id="users-page-info">Page 1</span>
-                            <button id="users-next-page" class="pagination-btn">Suivant</button>
-                        </div>
+                        <aside class="phase1-right">
+                            <h4 class="sub-section-title">Historique actions</h4>
+                            <div id="phase1-actions-cards" class="actions-column">
+                                <!-- Small action cards (JS can populate) -->
+                                <div class="action-card blue">
+                                    <div class="ac-left"><span class="material-icons ac-icon">visibility</span></div>
+                                    <div class="ac-main"><div class="ac-title">Voir profil</div><div class="ac-sub">Consulter les détails</div></div>
+                                    <div class="ac-right"><button class="btn-mini" title="Voir"><span class="material-icons">visibility</span></button></div>
+                                </div>
+                                <div class="action-card red">
+                                    <div class="ac-left"><span class="material-icons ac-icon">block</span></div>
+                                    <div class="ac-main"><div class="ac-title">Bloquer utilisateur</div><div class="ac-sub">Appliquer restriction</div></div>
+                                    <div class="ac-right"><button class="btn-mini" title="Bloquer"><span class="material-icons">block</span></button></div>
+                                </div>
+                                <div class="action-card green">
+                                    <div class="ac-left"><span class="material-icons ac-icon">gavel</span></div>
+                                    <div class="ac-main"><div class="ac-title">Ajuster score</div><div class="ac-sub">Modifier réputation</div></div>
+                                    <div class="ac-right"><button class="btn-mini" title="Ajuster"><span class="material-icons">edit</span></button></div>
+                                </div>
+                            </div>
+                        </aside>
                     </div>
                 </div>
             </div>
 
-            <!-- Anti Multi-comptes Tab -->
+            <!-- Anti Multi-comptes Tab (stylized Phase 2 UI) -->
             <div id="anti-multicompte-tab" class="tab-content">
                 <div class="content-container">
                     <div class="section-title">
@@ -335,33 +326,23 @@
                         <h2>Anti Multi-comptes - Phase 2</h2>
                     </div>
 
-                    <!-- Metrics Phase 2 -->
-                    <div class="phase-metrics-grid" id="phase2-metrics">
-                        <div class="phase-metric-card" data-metric="suspicious-accounts">
-                            <div class="pm-label">Comptes suspects</div>
-                            <div class="pm-value" id="metric-suspicious-accounts">--</div>
+                    <div id="phase2-anti-multi" class="phase2-section" style="display:block;">
+                        <div class="phase2-metrics-row">
+                            <div class="phase2-metric-card phase2-metric-suspects">
+                                <div class="phase2-metric-title">COMPTES SUSPECTS</div>
+                                <div class="phase2-metric-value" id="metric-suspicious-accounts">--</div>
+                            </div>
+                            <div class="phase2-metric-card phase2-metric-restrictions">
+                                <div class="phase2-metric-title">RESTRICTIONS ACTIVES</div>
+                                <div class="phase2-metric-value" id="metric-active-restrictions">--</div>
+                            </div>
                         </div>
-                        <div class="phase-metric-card" data-metric="active-restrictions">
-                            <div class="pm-label">Restrictions actives</div>
-                            <div class="pm-value" id="metric-active-restrictions">--</div>
-                        </div>
-                        <button class="phase-refresh-btn" id="refresh-phase2" title="Rafraîchir Phase 2"><span class="material-icons">refresh</span></button>
-                    </div>
 
-                    <div class="suspicious-cards-section">
-                        <h3 class="sub-section-title">Comptes suspects</h3>
-                        <div id="suspicious-cards-list" class="suspicious-cards-list"></div>
-                        <div class="empty-card" id="suspicious-cards-empty" style="display:none;">Aucun compte suspect</div>
-                    </div>
-
-                    <!-- Anti-Multicompte Content -->
-                    <div class="anti-multicompte-sections">
-                        <!-- Suspicious Accounts Section -->
-                        <div class="section">
-                            <h3>Comptes suspects</h3>
-                            <div class="filters-row">
-                                <input type="text" id="suspicious-search" placeholder="Rechercher..." class="search-input">
-                                <select id="suspicion-level-filter" class="filter-select">
+                        <div class="phase2-list-block">
+                            <div class="phase2-list-header" style="margin-bottom:18px;display:flex;align-items:center;gap:16px;">
+                                <h3 style="font-size:1.15rem;font-weight:700;flex:1;">Comptes suspects</h3>
+                                <input type="text" id="suspicious-search" placeholder="Rechercher..." class="search-input" style="max-width:220px;">
+                                <select id="suspicion-level-filter" class="filter-select" style="max-width:150px;">
                                     <option value="0">Tous les niveaux</option>
                                     <option value="1">Niveau 1</option>
                                     <option value="2">Niveau 2</option>
@@ -370,54 +351,59 @@
                                     <option value="5">Niveau 5</option>
                                 </select>
                             </div>
-                            <div class="table-container">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Utilisateur</th>
-                                            <th>Niveau suspicion</th>
-                                            <th>Raisons</th>
-                                            <th>Détecté le</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="suspicious-accounts-body">
-                                        <!-- Données dynamiques -->
-                                    </tbody>
-                                </table>
+                            <div class="phase2-suspects-list" id="suspicious-cards-list">
+                                <!-- Les cards suspects JS -->
                             </div>
+                            <div class="phase2-list-info" id="suspicious-cards-empty" style="display:none;">Aucun compte suspect</div>
                         </div>
 
-                        <!-- Devices Section -->
-                        <div class="section">
-                            <h3>Appareils suspects</h3>
-                            <div class="filters-row">
-                                <input type="text" id="device-search" placeholder="Rechercher appareil..." class="search-input">
-                                <select id="min-accounts-filter" class="filter-select">
-                                    <option value="2">Minimum 2 comptes</option>
-                                    <option value="3">Minimum 3 comptes</option>
-                                    <option value="5">Minimum 5 comptes</option>
-                                    <option value="10">Minimum 10 comptes</option>
-                                </select>
+                        <div class="phase2-list-block">
+                            <div class="phase2-list-header" style="margin-bottom:18px;">
+                                <h3 style="font-size:1.15rem;font-weight:700;">Appareils suspects</h3>
                             </div>
-                            <div class="table-container">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>ID Appareil</th>
-                                            <th>Plateforme</th>
-                                            <th>Modèle</th>
-                                            <th>Nb. comptes</th>
-                                            <th>Dernière activité</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="devices-body">
-                                        <!-- Données dynamiques -->
-                                    </tbody>
-                                </table>
+                            <div class="phase2-suspects-list" id="devices-cards-list">
+                                <!-- Les cards appareils JS -->
+                            </div>
+                            <div class="phase2-list-info" id="devices-cards-empty" style="display:none;">Aucun appareil suspect</div>
+                        </div>
+
+                        <div id="phase2-modal" class="phase2-modal" style="display:none;">
+                            <div class="phase2-modal-content">
+                                <div class="phase2-modal-header">
+                                    <div class="phase2-modal-title">Compte suspect - @Utilisateur_Nolani</div>
+                                    <button class="phase2-modal-close" onclick="window.hidePhase2Modal && window.hidePhase2Modal()">&times;</button>
+                                </div>
+                                <div class="phase2-modal-body">
+                                    <div class="phase2-modal-level">Niveau 3/5</div>
+                                    <div class="phase2-modal-info-row"><span>Username:</span> <b>@Utilisateur_Nolani</b></div>
+                                    <div class="phase2-modal-info-row"><span>ID utilisateur:</span> <b>Nolaninho</b></div>
+                                    <div class="phase2-modal-info-row"><span>Appareil:</span> <b>64C6F915-0F7...</b></div>
+                                    <div class="phase2-modal-info-row"><span>Détecté le:</span> <b>2/10/2025 18:42</b></div>
+                                    <div class="phase2-modal-info-row"><span>Statut:</span> <b>PENDING</b></div>
+                                    <div class="phase2-modal-reasons">
+                                        <div class="phase2-modal-reason"><span class="material-icons warning">warning</span> Appareil partagé détecté</div>
+                                        <div class="phase2-modal-reason"><span class="material-icons warning">warning</span> Pattern de comportement coordonné détecté</div>
+                                    </div>
+                                    <div class="phase2-modal-linked-title">Comptes liés:</div>
+                                    <div class="phase2-modal-linked-list">
+                                        <div class="phase2-modal-linked-item"><span class="material-icons">person</span> @Nolaninho</div>
+                                        <div class="phase2-modal-linked-item"><span class="material-icons">person</span> @Test111</div>
+                                    </div>
+                                </div>
+                                <div class="phase2-modal-footer">
+                                    <button class="phase2-modal-close-btn" onclick="window.hidePhase2Modal && window.hidePhase2Modal()">Fermer</button>
+                                    <button class="phase2-modal-profile-btn">Voir profil admin</button>
+                                </div>
                             </div>
                         </div>
+                        <script>
+                            window.showPhase2Modal = function() {
+                                document.getElementById('phase2-modal').style.display = 'flex';
+                            };
+                            window.hidePhase2Modal = function() {
+                                document.getElementById('phase2-modal').style.display = 'none';
+                            };
+                        </script>
                     </div>
                 </div>
             </div>
@@ -428,11 +414,11 @@
 
     <!-- Modals -->
     <!-- User Profile Modal -->
-    <div id="user-profile-modal" class="modal">
+    <div id="user-profile-modal" class="modal" style="display:none;">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="modal-user-title">Profil utilisateur</h3>
-                <button class="modal-close">&times;</button>
+                <button class="modal-close" id="close-profile-modal">&times;</button>
             </div>
             <div class="modal-body" id="user-profile-content">
                 <!-- Contenu du profil utilisateur -->
@@ -440,49 +426,58 @@
         </div>
     </div>
 
-    <!-- Admin Actions Modal -->
-    <div id="admin-actions-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="actions-modal-title">Actions administrateur</h3>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="actions-grid">
-                    <button class="action-btn ban" data-action="ban">
-                        <span class="material-icons">block</span>
-                        Bannir
-                    </button>
-                    <button class="action-btn score" data-action="score">
-                        <span class="material-icons">trending_up</span>
-                        Ajuster score
-                    </button>
-                    <button class="action-btn quarantine" data-action="quarantine">
-                        <span class="material-icons">warning</span>
-                        Quarantaine
-                    </button>
-                    <button class="action-btn note" data-action="note">
-                        <span class="material-icons">note_add</span>
-                        Ajouter note
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 
-    <!-- Application Scripts -->
+        <!-- Application Scripts -->
+    <script src="js/init.js"></script>
     <script src="js/firebase-config.js"></script>
+    <script src="js/phase1-moderation.js"></script>
     <script src="js/admin-actions-service.js"></script>
-    <script src="js/core/profile.js"></script>
-    <script src="js/admin-auth.js"></script>
-    <script src="js/moderation-actions.js"></script>
-    <script src="js/navigation.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/diagnostic.js"></script>
+        <script src="js/core/profile.js"></script>
+        <script src="js/admin-auth.js"></script>
+        <script src="js/moderation-actions.js"></script>
+        <script src="js/navigation.js"></script>
+        <script src="js/dashboard.js"></script>
+        <script src="js/diagnostic.js"></script>
+
+        <!-- Phase 2 Anti Multi-comptes script -->
+        <script src="js/phase2-anti-multi.js"></script>
+
+
+        <script>
+        // Patch: Fix modal close for user profile modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const profileModal = document.getElementById('user-profile-modal');
+            const closeBtn = document.getElementById('close-profile-modal');
+            if (closeBtn && profileModal) {
+                closeBtn.addEventListener('click', function() {
+                    profileModal.style.display = 'none';
+                });
+            }
+            // Close modal when clicking outside modal-content
+            if (profileModal) {
+                profileModal.addEventListener('click', function(e) {
+                    if (e.target === profileModal) {
+                        profileModal.style.display = 'none';
+                    }
+                });
+            }
+            // Optionally, expose a function to open the modal
+            window.showUserProfileModal = function() {
+                profileModal.style.display = 'flex';
+            };
+            window.hideUserProfileModal = function() {
+                profileModal.style.display = 'none';
+            };
+            // Initialize Phase2 module (if present)
+            if(window.Phase2AntiMulti && typeof window.Phase2AntiMulti.initialize === 'function'){
+                try{ window.Phase2AntiMulti.initialize(); }catch(e){ console.warn('Phase2 init failed', e); }
+            }
+        });
+        </script>
 </body>
 </html>

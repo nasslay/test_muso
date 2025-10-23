@@ -1,13 +1,10 @@
-// Active Users View Logic - Enhanced with Flutter-style cards
+// Active Users View Logic
 let allActiveUsers = [];
 let filteredActiveUsers = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let selectedUser = null;
 let currentActivityFilter = 'all';
-
-// Enhanced user cache for performance
-const userCache = new Map();
 
 // Load active users from Firebase (last 24 hours)
 async function loadActiveUsers() {
@@ -25,7 +22,7 @@ async function loadActiveUsers() {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         
-        // Get user actions from last 24 hours with better error handling
+        // Get user actions from last 24 hours
         const actionsSnapshot = await db.collection('user_actions_log')
             .where('timestamp', '>=', firebase.firestore.Timestamp.fromDate(yesterday))
             .get();
@@ -68,52 +65,45 @@ async function loadActiveUsers() {
         
         console.log(`✅ Found ${userActivityMap.size} unique active users`);
         
-        // Batch fetch user details for better performance
-        const userIds = Array.from(userActivityMap.keys());
-        const batchSize = 10;
-        const userDetailsMap = new Map();
-        
-        for (let i = 0; i < userIds.length; i += batchSize) {
-            const batch = userIds.slice(i, i + batchSize);
-            const promises = batch.map(async (userId) => {
-                // Check cache first
-                if (userCache.has(userId)) {
-                    return { id: userId, data: userCache.get(userId) };
+        // Fetch user details for each active user
+        allActiveUsers = [];
+        for (const [userId, activity] of userActivityMap) {
+            try {
+                const userDoc = await db.collection('users').doc(userId).get();
+                let userDetails = {
+                    username: 'Utilisateur inconnu',
+                    email: 'N/A',
+                    profilePicture: null,
+                    isAdmin: false
+                };
+                
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    userDetails = {
+                        username: userData.username || 'Utilisateur inconnu',
+                        email: userData.email || 'N/A',
+                        profilePicture: userData.profilePicture || null,
+                        isAdmin: userData.isAdmin || false
+                    };
                 }
                 
-                try {
-                    const userDoc = await db.collection('users').doc(userId).get();
-                    const userData = userDoc.exists ? userDoc.data() : null;
-                    
-                    // Cache the result
-                    userCache.set(userId, userData);
-                    
-                    return { id: userId, data: userData };
-                } catch (error) {
-                    console.log(`❌ Error fetching user ${userId}:`, error);
-                    return { id: userId, data: null };
-                }
-            });
-            
-            const results = await Promise.all(promises);
-            results.forEach(result => {
-                userDetailsMap.set(result.id, result.data);
-            });
+                allActiveUsers.push({
+                    ...activity,
+                    ...userDetails
+                });
+                
+            } catch (error) {
+                console.log(`❌ Error fetching user ${userId}:`, error);
+                // Add user without details
+                allActiveUsers.push({
+                    ...activity,
+                    username: 'Utilisateur inconnu',
+                    email: 'N/A',
+                    profilePicture: null,
+                    isAdmin: false
+                });
+            }
         }
-        
-        // Combine activity and user data
-        allActiveUsers = Array.from(userActivityMap.values()).map(activity => {
-            const userData = userDetailsMap.get(activity.userId) || {};
-            return {
-                ...activity,
-                username: userData.username || 'Utilisateur inconnu',
-                email: userData.email || 'N/A',
-                profilePicture: userData.profilePicture || null,
-                isAdmin: userData.isAdmin || false,
-                createdAt: userData.createdAt?.toDate() || null,
-                reputationScore: userData.reputationScore || 0
-            };
-        });
         
         // Sort by action count (most active first)
         allActiveUsers.sort((a, b) => b.actionCount - a.actionCount);
@@ -138,30 +128,27 @@ async function loadActiveUsers() {
     }
 }
 
-// Set activity filter with enhanced UI
+// Set activity filter
 function setActivityFilter(filter) {
     currentActivityFilter = filter;
     
-    // Update filter chip states
-    document.querySelectorAll('.filter-chip').forEach(chip => {
-        chip.classList.remove('active');
-        if (chip.dataset.filter === filter) {
-            chip.classList.add('active');
-        }
+    // Update button states
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
     });
+    event.target.closest('.filter-btn').classList.add('active');
     
     applyFilters();
 }
 
-// Enhanced apply filters function
+// Apply filters
 function applyFilters() {
     const searchTerm = document.getElementById('search-input').value.toLowerCase();
     
     filteredActiveUsers = allActiveUsers.filter(user => {
         const matchesSearch = searchTerm === '' || 
             user.userId.toLowerCase().includes(searchTerm) ||
-            user.username.toLowerCase().includes(searchTerm) ||
-            user.email.toLowerCase().includes(searchTerm);
+            user.username.toLowerCase().includes(searchTerm);
         
         let matchesActivity = true;
         if (currentActivityFilter === 'high') {
@@ -179,22 +166,6 @@ function applyFilters() {
     currentPage = 1;
     updateStats();
     renderActiveUsers();
-    
-    // Show/hide clear search button
-    const clearBtn = document.getElementById('clear-search');
-    const searchInput = document.getElementById('search-input');
-    if (searchInput.value.length > 0) {
-        clearBtn.style.display = 'block';
-    } else {
-        clearBtn.style.display = 'none';
-    }
-}
-
-// Clear search function
-function clearSearch() {
-    document.getElementById('search-input').value = '';
-    document.getElementById('clear-search').style.display = 'none';
-    applyFilters();
 }
 
 // Update statistics
@@ -206,18 +177,18 @@ function updateStats() {
     document.getElementById('current-page-info').textContent = `${currentPage}/${totalPages}`;
 }
 
+// Get activity level color
+function getActivityColor(count) {
+    if (count > 10) return '#4caf50'; // Green - high activity
+    if (count >= 5) return '#ff9800'; // Orange - medium activity
+    return '#2196f3'; // Blue - low activity
+}
+
 // Get activity level text
 function getActivityLevel(count) {
     if (count > 10) return 'Très actif';
     if (count >= 5) return 'Actif';
     return 'Peu actif';
-}
-
-// Get activity level CSS class
-function getActivityClass(count) {
-    if (count > 10) return 'level-3'; // High activity
-    if (count >= 5) return 'level-2'; // Medium activity
-    return 'level-1'; // Low activity
 }
 
 // Format action type
@@ -236,7 +207,7 @@ function formatActionType(type) {
     return types[type] || type;
 }
 
-// Enhanced rendering with new card system
+// Render active users
 function renderActiveUsers() {
     const activeList = document.getElementById('active-list');
     const emptyState = document.getElementById('empty-state');
@@ -251,7 +222,31 @@ function renderActiveUsers() {
     const endIndex = startIndex + itemsPerPage;
     const pageUsers = filteredActiveUsers.slice(startIndex, endIndex);
     
-    activeList.innerHTML = pageUsers.map(user => createEnhancedUserCard(user)).join('');
+    activeList.innerHTML = pageUsers.map(user => {
+        const activityColor = getActivityColor(user.actionCount);
+        const activityLevel = getActivityLevel(user.actionCount);
+        const activityClass = user.actionCount>10? 'reputation-positive': user.actionCount>=5? 'reputation-neutral':'reputation-negative';
+        return `
+    <div class="entity-card" onclick="openProfileModal('${user.userId}')">
+            <div class="account-header">
+                <div class="account-avatar">${user.profilePicture ? `<img src='${user.profilePicture}' alt='${user.username}'>` : `<span class='material-icons'>account_circle</span>`}</div>
+                <div class="account-info">
+                    <div class="account-name">${user.username}</div>
+                    <div class="account-id" style="margin-top:4px;">
+                        ${user.isAdmin ? `<span class='chip admin'>Admin</span>`:''}
+                        <span class="chip ${activityClass}"><span class='material-icons' style='font-size:14px;'>trending_up</span>${activityLevel}</span>
+                        <span class="chip" style="opacity:.85;">${user.actionCount} act.</span>
+                    </div>
+                </div>
+                <div class="account-status chip ${activityClass}" style="cursor:default;">${activityLevel}</div>
+            </div>
+            <div class="account-details">
+                <div class="detail-item"><span class="material-icons">bar_chart</span><span>Actions: <strong>${user.actionCount}</strong></span></div>
+                <div class="detail-item"><span class="material-icons">update</span><span>${formatActionType(user.lastActionType)}</span></div>
+                <div class="detail-item"><span class="material-icons">schedule</span><span>${formatDate(user.lastAction)}</span></div>
+            </div>
+        </div>`;
+    }).join('');
     
     emptyState.style.display = 'none';
     activeList.style.display = 'block';
@@ -259,100 +254,13 @@ function renderActiveUsers() {
     updatePaginationControls();
 }
 
-function createEnhancedUserCard(user) {
-    const activityLevel = getActivityLevel(user.actionCount);
-    const activityClass = getActivityClass(user.actionCount);
-    const timestamp = formatDate(user.lastAction);
-    const lastActionText = formatActionType(user.lastActionType);
-    
-    return `
-        <div class="enhanced-card clickable" onclick="openProfileModal('${user.userId}')">
-            <div class="card-header">
-                <div class="card-avatar">
-                    ${user.profilePicture ? 
-                        `<img src="${user.profilePicture}" alt="${user.username}">` :
-                        `<span class="material-icons">person</span>`
-                    }
-                </div>
-                <div class="card-user-info">
-                    <div class="card-username">${user.username}</div>
-                    <div class="card-subtitle">${user.userId.substring(0, 8)}...</div>
-                    <div class="card-chips">
-                        ${user.isAdmin ? `<span class="chip admin"><span class="material-icons">admin_panel_settings</span>Admin</span>` : ''}
-                        <span class="chip ${activityClass}">
-                            <span class="material-icons">trending_up</span>
-                            ${activityLevel}
-                        </span>
-                        <span class="chip reputation-neutral">
-                            ${user.actionCount} actions
-                        </span>
-                    </div>
-                </div>
-                <div class="card-status ${activityClass}">
-                    ${activityLevel}
-                </div>
-            </div>
-            
-            <div class="card-body">
-                <div class="card-metrics">
-                    <div class="metric-item">
-                        <div class="metric-value">${user.actionCount}</div>
-                        <div class="metric-label">Actions 24h</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-value">${user.reputationScore || 0}</div>
-                        <div class="metric-label">Réputation</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-value">${user.actions ? user.actions.length : 0}</div>
-                        <div class="metric-label">Types diff.</div>
-                    </div>
-                </div>
-                
-                <div class="card-details">
-                    <div class="detail-row">
-                        <span class="material-icons">update</span>
-                        <span class="detail-text"><strong>Dernière action:</strong> ${lastActionText}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="material-icons">schedule</span>
-                        <span class="detail-text"><strong>Il y a:</strong> ${timestamp}</span>
-                    </div>
-                    ${user.email !== 'N/A' ? `
-                        <div class="detail-row">
-                            <span class="material-icons">email</span>
-                            <span class="detail-text">${user.email}</span>
-                        </div>
-                    ` : ''}
-                </div>
-            </div>
-            
-            <div class="card-footer">
-                <button class="card-action-btn" onclick="openProfileModal('${user.userId}'); event.stopPropagation();">
-                    <span class="material-icons">person</span>
-                    Profil
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-// Enhanced pagination controls
+// ===== Modal Management & Pagination =====
 function updatePaginationControls() {
     const totalPages = Math.ceil(filteredActiveUsers.length / itemsPerPage) || 1;
-    const paginationContainer = document.getElementById('pagination-container');
-    
-    document.getElementById('current-page-info').textContent = `Page ${currentPage} / ${totalPages}`;
+    document.getElementById('pagination-info').textContent = `Page ${currentPage} / ${totalPages}`;
     
     document.getElementById('prev-page').disabled = currentPage === 1;
     document.getElementById('next-page').disabled = currentPage >= totalPages;
-    
-    // Show/hide pagination based on content
-    if (filteredActiveUsers.length > itemsPerPage) {
-        paginationContainer.style.display = 'flex';
-    } else {
-        paginationContainer.style.display = 'none';
-    }
 }
 
 function previousPage() {

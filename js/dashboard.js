@@ -160,7 +160,23 @@ class Dashboard {
         await this.loadModerationData();
         break;
       case 'anti-multicompte':
-        await this.loadAntiMulticompteData();
+        // Ensure Phase 2 UI is populated. Prefer using the dedicated Phase2 module when available.
+        try {
+          if (window.Phase2AntiMulti && typeof window.Phase2AntiMulti.initialize === 'function') {
+            console.log('🛡️ Initialisation Phase2 via Phase2AntiMulti.initialize()');
+            await window.Phase2AntiMulti.initialize();
+          } else {
+            // Fallback to legacy loader if present
+            if (typeof this.loadAntiMulticompteData === 'function') {
+              console.log('🛡️ Phase2 module absent, appel de loadAntiMulticompteData() fallback');
+              await this.loadAntiMulticompteData();
+            } else {
+              console.warn('⚠️ Aucun loader Phase2 trouvé');
+            }
+          }
+        } catch (e) {
+          console.error('❌ Erreur initialisation Phase2:', e);
+        }
         break;
     }
   }
@@ -318,10 +334,9 @@ class Dashboard {
         };
       });
 
-      // Si pas d'utilisateurs, créer quelques utilisateurs de test
+      // Si pas d'utilisateurs, ne rien insérer automatiquement — afficher état vide
       if (users.length === 0) {
-        console.log('Aucun utilisateur trouvé, création d\'utilisateurs de test...');
-        users = await this.createTestUsers();
+        console.log('Aucun utilisateur trouvé — affichage de l\'état vide (pas de données de test injectées)');
       }
 
       this.renderModerationUsers(users);
@@ -332,194 +347,17 @@ class Dashboard {
     }
   }
 
-  async createTestUsers() {
-    const testUsers = [
-      {
-        email: 'user1@test.com',
-        displayName: 'Utilisateur Test 1',
-        score: 45,
-        reportCount: 3,
-        isBlocked: false,
-        createdAt: new Date(),
-        lastActivity: new Date()
-      },
-      {
-        email: 'user2@test.com',
-        displayName: 'Utilisateur Test 2', 
-        score: 25,
-        reportCount: 7,
-        isBlocked: true,
-        createdAt: new Date(),
-        lastActivity: new Date()
-      },
-      {
-        email: 'user3@test.com',
-        displayName: 'Utilisateur Test 3',
-        score: 85,
-        reportCount: 0,
-        isBlocked: false,
-        createdAt: new Date(),
-        lastActivity: new Date()
-      }
-    ];
-
-    // Sauvegarder dans Firebase pour usage futur
-    try {
-      const batch = FirebaseServices.firestore.batch();
-      testUsers.forEach(user => {
-        const docRef = FirebaseServices.firestore
-          .collection(FirebaseServices.collections.users)
-          .doc();
-        batch.set(docRef, {
-          ...user,
-          uid: docRef.id,
-          createdAt: FirebaseServices.timestamp(),
-          lastActivity: FirebaseServices.timestamp()
-        });
-      });
-      await batch.commit();
-      console.log('✅ Utilisateurs de test créés dans Firebase');
-    } catch (error) {
-      console.warn('Impossible de créer les utilisateurs de test dans Firebase:', error);
-    }
-
-    return testUsers.map((user, index) => ({
-      ...user,
-      id: `test_user_${index + 1}`
-    }));
-  }
-
-  async loadAntiMulticompteData() {
-    try {
-      console.log('🔐 Chargement données anti multi-comptes...');
-      
-      // Charger les comptes suspects (avec fallback si la collection n'existe pas)
-      let suspiciousAccounts = [];
-      try {
-        const suspiciousQuery = FirebaseServices.firestore
-          .collection(FirebaseServices.collections.suspiciousAccounts)
-          .orderBy('suspiciousLevel', 'desc')
-          .limit(50);
-
-        const suspiciousSnapshot = await suspiciousQuery.get();
-        suspiciousAccounts = suspiciousSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          detectedAt: doc.data().detectedAt?.toDate()
-        }));
-      } catch (suspiciousError) {
-        console.warn('Collection suspicious_accounts inexistante, création de données de test');
-        // Créer quelques données de test
-        suspiciousAccounts = await this.createTestSuspiciousAccounts();
-      }
-
-      // Charger les appareils avec plusieurs comptes
-      let suspiciousDevices = [];
-      try {
-        const devicesQuery = FirebaseServices.firestore
-          .collection(FirebaseServices.collections.deviceRegistrations)
-          .orderBy('accountsCount', 'desc')
-          .where('accountsCount', '>=', 2)
-          .limit(50);
-
-        const devicesSnapshot = await devicesQuery.get();
-        suspiciousDevices = devicesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          lastActivity: doc.data().lastActivity?.toDate()
-        }));
-      } catch (devicesError) {
-        console.warn('Collection device_registrations avec multi-comptes inexistante, création de données de test');
-        suspiciousDevices = await this.createTestSuspiciousDevices();
-      }
-
-      this.renderSuspiciousAccounts(suspiciousAccounts);
-      this.renderSuspiciousDevices(suspiciousDevices);
-      
-      console.log('✅ Données anti multi-comptes chargées');
-    } catch (error) {
-      console.error('❌ Erreur chargement anti multi-comptes:', error);
-      this.showError('Erreur lors du chargement des données anti multi-comptes');
-    }
-  }
+  // createTestUsers removed to prevent hard-coded demo data insertion.
+  // If needed during development, use a dedicated dev-only script outside the main codebase.
 
   async createTestSuspiciousAccounts() {
-    // Créer quelques comptes suspects de test dans Firebase
-    const testAccounts = [
-      {
-        email: 'suspect1@test.com',
-        displayName: 'Utilisateur Suspect 1',
-        suspiciousLevel: 4,
-        reasons: ['Création rapide de comptes', 'Activité suspecte'],
-        detectedAt: new Date()
-      },
-      {
-        email: 'suspect2@test.com', 
-        displayName: 'Utilisateur Suspect 2',
-        suspiciousLevel: 3,
-        reasons: ['Même appareil que d\'autres comptes'],
-        detectedAt: new Date()
-      }
-    ];
-
-    // Sauvegarder dans Firebase pour usage futur
-    try {
-      const batch = FirebaseServices.firestore.batch();
-      testAccounts.forEach(account => {
-        const docRef = FirebaseServices.firestore
-          .collection(FirebaseServices.collections.suspiciousAccounts)
-          .doc();
-        batch.set(docRef, {
-          ...account,
-          detectedAt: FirebaseServices.timestamp()
-        });
-      });
-      await batch.commit();
-      console.log('✅ Comptes suspects de test créés dans Firebase');
-    } catch (error) {
-      console.warn('Impossible de créer les comptes de test dans Firebase:', error);
-    }
-
-    return testAccounts;
+    // Test helper removed — do not create demo suspicious accounts programmatically
+    return [];
   }
 
   async createTestSuspiciousDevices() {
-    const testDevices = [
-      {
-        deviceId: 'DEVICE123456789ABC',
-        platform: 'Android',
-        model: 'Samsung Galaxy S21',
-        accountsCount: 5,
-        lastActivity: new Date()
-      },
-      {
-        deviceId: 'DEVICE987654321XYZ',
-        platform: 'iOS', 
-        model: 'iPhone 13',
-        accountsCount: 3,
-        lastActivity: new Date()
-      }
-    ];
-
-    // Sauvegarder dans Firebase pour usage futur
-    try {
-      const batch = FirebaseServices.firestore.batch();
-      testDevices.forEach(device => {
-        const docRef = FirebaseServices.firestore
-          .collection(FirebaseServices.collections.deviceRegistrations)
-          .doc();
-        batch.set(docRef, {
-          ...device,
-          lastActivity: FirebaseServices.timestamp()
-        });
-      });
-      await batch.commit();
-      console.log('✅ Appareils suspects de test créés dans Firebase');
-    } catch (error) {
-      console.warn('Impossible de créer les appareils de test dans Firebase:', error);
-    }
-
-    return testDevices;
+    // Test helper removed — do not create demo suspicious devices programmatically
+    return [];
   }
 
   async loadPosts() {
@@ -1232,6 +1070,43 @@ class Dashboard {
   }
 
   renderSuspiciousAccounts(accounts) {
+    // Prefer card-list rendering when available (mobile-like view)
+    const cardList = document.getElementById('suspicious-cards-list');
+    if (cardList) {
+      cardList.innerHTML = accounts.map(account => {
+        const level = account.suspiciousLevel || 1;
+        const reasons = (account.reasons || []).slice(0,2).join(', ');
+        const relatedCount = (account.relatedAccounts || []).length || 0;
+        return `
+          <div class="suspicious-card level-${level}" data-id="${account.id}">
+            <div class="sc-header">
+              <div class="sc-avatar"><span class="material-icons">person</span></div>
+              <div class="sc-main">
+                <div class="sc-name">${account.displayName || account.id}</div>
+                <div class="sc-id">ID: ${String(account.id).substring(0,18)}${String(account.id).length>18?'…':''}</div>
+                <div class="sc-meta">
+                  <span class="level-badge level-${level}">Niveau ${level}</span>
+                  ${relatedCount>0?`<span class="rel-badge">${relatedCount} liés</span>`:''}
+                  <span class="detected-time">${this.formatDate(account.detectedAt)}</span>
+                </div>
+              </div>
+              <div class="sc-open"><span class="material-icons">chevron_right</span></div>
+            </div>
+            <div class="sc-reasons">${reasons || '<em>Aucune raison spécifiée</em>'}</div>
+          </div>`;
+      }).join('');
+
+      // attach click handlers to cards to open review
+      cardList.querySelectorAll('.suspicious-card').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.dataset.id;
+          this.reviewSuspiciousAccount && this.reviewSuspiciousAccount(id);
+        });
+      });
+      return;
+    }
+
+    // Fallback: table rendering (desktop / legacy)
     const tbody = document.getElementById('suspicious-accounts-body');
     if (!tbody) return;
 
@@ -1266,6 +1141,33 @@ class Dashboard {
   }
 
   renderSuspiciousDevices(devices) {
+    // Prefer device cards list if available
+    const deviceList = document.getElementById('devices-cards-list');
+    if (deviceList) {
+      deviceList.innerHTML = devices.map(device => `
+        <div class="suspicious-card device-card" data-did="${device.id}">
+          <div class="sc-header">
+            <div class="sc-avatar"><span class="material-icons">devices</span></div>
+            <div class="sc-main">
+              <div class="sc-name">${device.deviceId || 'ID inconnu'}</div>
+              <div class="sc-id">${device.platform || '—'} • ${device.model || ''}</div>
+              <div class="sc-meta"><span class="detected-time">${this.formatDate(device.lastActivity)}</span></div>
+            </div>
+            <div class="sc-open"><span class="material-icons">chevron_right</span></div>
+          </div>
+          <div class="sc-reasons"><span class="account-count">${device.accountsCount || (device.accounts?device.accounts.length:0)} comptes</span></div>
+        </div>
+      `).join('');
+
+      deviceList.querySelectorAll('.device-card').forEach(el=>{
+        el.addEventListener('click', ()=>{
+          const id = el.dataset.did; this.showDeviceDetails && this.showDeviceDetails(id);
+        });
+      });
+      return;
+    }
+
+    // Fallback: table rendering
     const tbody = document.getElementById('devices-body');
     if (!tbody) return;
 
